@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from qdrant_client import QdrantClient, models
-from sentence_transformers import SentenceTransformer
+
+from drop_dublicate import EMBEDDING_MODEL_NAME, load_embedding_model
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,8 @@ class QdrantHybridIndex:
         qdrant_path: str | Path | None = None,
         url: str | None = None,
         api_key: str | None = None,
-        embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        embedding_model: str = EMBEDDING_MODEL_NAME,
+        model_path: str | Path | None = None,
         metadata_path: str | Path | None = None,
         client: QdrantClient | None = None,
     ) -> None:
@@ -60,7 +62,7 @@ class QdrantHybridIndex:
 
         self.collection_name = collection_name
         self.embedding_model_name = embedding_model
-        self._model = SentenceTransformer(embedding_model)
+        self._model = load_embedding_model(embedding_model, model_path)
         self._vocabulary: dict[str, int] = {}
         self._idf: dict[int, float] = {}
         self._document_count = 0

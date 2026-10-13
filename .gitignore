@@ -1,4 +1,6 @@
 news.db
+unique.db
+model/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -219,3 +221,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Локально сохранённые модели эмбеддингов
+models/
+
+# Qdrant-база дедупликации
+qdrant_dedup/
