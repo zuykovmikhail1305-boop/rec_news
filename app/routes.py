@@ -3,9 +3,9 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from . import models, security
-from .auth import get_current_user, remember_user_cookie, logout_cookie
-from .database import get_db
+import models, security
+from auth import get_current_user, remember_user_cookie, logout_cookie
+from database import get_db
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")

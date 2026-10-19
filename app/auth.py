@@ -7,9 +7,9 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from . import models
-from .database import get_db
-from .security import pwd_context
+import models
+from database import get_db
+from security import pwd_context
 
 SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex(32))
 ALGORITHM = "HS256"
@@ -72,4 +72,4 @@ def login_redirect_response(url: str = "/"):
     return RedirectResponse(url, status_code=status.HTTP_303_SEE_OTHER)
 
 
-from .security import verify_password  # noqa: E402
+from security import verify_password  # noqa: E402
