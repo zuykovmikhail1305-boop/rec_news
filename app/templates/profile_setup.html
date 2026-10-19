@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <span class="badge">Шаг 2 из 2</span>
+  <h1>Анкета компании</h1>
+  <p class="sub">Памятка регистрации компактных компаний</p>
+  <form method="post" action="/profile/setup">
+    <fieldset>
+      <legend>1. Характеристика деятельности</legend>
+      <p class="sub" style="margin:4px 0 10px">Какая категория (можно несколько)</p>
+      <div class="checks">
+        {% for c in categories %}
+        <label><input type="checkbox" name="categories" value="{{ c }}"
+          {% if c in (profile.categories or '')|split(',') %}checked{% endif %}> {{ c }}</label>
+        {% endfor %}
+      </div>
+      <label for="activity_description">Характер деятельности</label>
+      <textarea id="activity_description" name="activity_description" rows="3"
+        placeholder="Опишите деятельность компании">{{ profile.activity_description or '' }}</textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Какое исполнение ФСО?</legend>
+      <div class="radio-col">
+        {% for o in fso_options %}
+        <label><input type="radio" name="fso_execution" value="{{ o }}"
+          {% if profile.fso_execution == o %}checked{% endif %}> {{ o }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Где работал ранее?</legend>
+      <div class="radio-col">
+        {% for o in sector_options %}
+        <label><input type="radio" name="previous_sector" value="{{ o }}"
+          {% if profile.previous_sector == o %}checked{% endif %}> {{ o }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Являетесь ли сотрудником holding center?</legend>
+      <div class="radio-col">
+        <label><input type="radio" name="holding_center_employee" value="yes"
+          {% if profile.holding_center_employee %}checked{% endif %}> Да, являюсь</label>
+        <label><input type="radio" name="holding_center_employee" value="no"
+          {% if not profile.holding_center_employee %}checked{% endif %}> Нет, не являюсь</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Какие сервисы использует компания?</legend>
+      <div class="checks">
+        {% for o in service_options %}
+        <label><input type="checkbox" name="service_models" value="{{ o }}"
+          {% if o in (profile.service_models or '')|split(',') %}checked{% endif %}> {{ o }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <button type="submit">Сохранить и продолжить</button>
+  </form>
+</div>
+<div class="footer"><a href="/logout">Выйти</a></div>
+{% endblock %}
