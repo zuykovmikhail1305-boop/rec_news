@@ -9,6 +9,9 @@ dependencies = [
     "dotenv>=0.9.9",
     "huggingface>=0.0.1",
     "jupyter>=1.1.1",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.4",
+    "pandas>=3.0.6",
     "qdrant-client>=1.19.1",
     "sentence-transformers>=6.1.0",
 ]

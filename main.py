@@ -4,10 +4,14 @@ from drop_dublicate import NewsDeduplicator
 
 
 def main() -> None:
-    """Запускает непрерывную обработку входящих новостей."""
+    """Запускает непрерывную дедупликацию новостей, уже обработанных LLM.
+
+    Новости в new_summary.db кладёт news_summarizer.py (из news.db).
+    """
     deduplicator = NewsDeduplicator(
-        source_database_path="news.db",
+        source_database_path="new_summary.db",
         unique_database_path="unique.db",
+        qdrant_path="qdrant_data",
         verbose=True,
     )
 
