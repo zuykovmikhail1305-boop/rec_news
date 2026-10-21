@@ -4,20 +4,22 @@
 шаблоном :class:`audience_profile.AudienceProfile`. Для каждой уникальной
 новости дедупликация (``drop_dublicate.py``) кладёт её характеристику
 в коллекцию ``news_audience`` общей базы Qdrant — тем же
-:class:`embeddig.QdrantHybridIndex`, что и выжимки в коллекции ``news``.
+:class:`embeddig.QdrantIndex`, что и заголовки с первыми абзацами
+в коллекции ``news``. Пока характеристики не заполняются (LLM отключена),
+коллекция ``news_audience`` пуста и рекомендовать нечего.
 
 Рекомендация:
 
 1. характеристика пользователя (профиль или текст шаблона) векторизуется —
-   dense-эмбеддинг и BM25 sparse-вектор по заполненным полям шаблона;
+   dense-эмбеддинг заполненных полей шаблона;
 2. в ``news_audience`` ищутся новости с самыми похожими характеристиками;
-   похожесть — взвешенная сумма косинусов dense и sparse;
+   похожесть — косинус dense-эмбеддингов;
 3. к каждой новости прикладываются совпавшие поля шаблона — чтобы объяснить
    пользователю, почему новость ему подобрана.
 
 Запуск для компании из датасета:
 
-    python recommender.py --company U_26030 --role "финансовый директор"
+    python scripts/recommend.py --company U_26030 --role "финансовый директор"
 """
 
 from __future__ import annotations
@@ -30,15 +32,15 @@ from typing import Any, Iterable, Sequence
 from qdrant_client import QdrantClient
 from sentence_transformers import SentenceTransformer
 
-from audience_profile import ROLES, AudienceProfile, counterparty_industries
-from embeddig import QdrantHybridIndex, TextDocument, statistics_path
-from news_db import SummarizedNews
+from news_pipeline.config import COMPANIES_CSV, PAYMENTS_CSV, QDRANT_PATH
+from news_pipeline.recommendation.audience_profile import ROLES, AudienceProfile, counterparty_industries
+from news_pipeline.index.embeddig import QdrantIndex, TextDocument
+from news_pipeline.storage.news_db import ProcessedNews
 
 AUDIENCE_COLLECTION = "news_audience"
-BASE_DIR = Path(__file__).resolve().parent
 
 
-def news_audience(news: SummarizedNews) -> AudienceProfile:
+def news_audience(news: ProcessedNews) -> AudienceProfile:
     """Характеристика новости: из ``metadata.analysis.audience`` или из текста шаблона."""
     audience = (news.metadata.get("analysis") or {}).get("audience")
     if audience:
@@ -46,7 +48,7 @@ def news_audience(news: SummarizedNews) -> AudienceProfile:
     return AudienceProfile.from_text(news.audience_text)
 
 
-def audience_document(news: SummarizedNews) -> TextDocument | None:
+def audience_document(news: ProcessedNews) -> TextDocument | None:
     """Документ для коллекции ``news_audience``; ``None``, если рекомендовать нечего.
 
     Не попадают новости, которые LLM признала не бизнесовыми, и новости
@@ -65,7 +67,7 @@ def audience_document(news: SummarizedNews) -> TextDocument | None:
             "title": news.title,
             "url": news.url,
             "publication_time": news.publication_time,
-            "summary": news.summary,
+            "first_paragraph": news.first_paragraph,
             "audience": profile.to_dict(),
         },
     )
@@ -73,24 +75,17 @@ def audience_document(news: SummarizedNews) -> TextDocument | None:
 
 def open_audience_index(
     *,
-    qdrant_path: str | Path = BASE_DIR / "qdrant_data",
+    qdrant_path: str | Path = QDRANT_PATH,
     client: QdrantClient | None = None,
     model: SentenceTransformer | None = None,
-    dense_weight: float = 0.5,
-) -> QdrantHybridIndex:
+) -> QdrantIndex:
     """Открывает коллекцию характеристик новостей в общей базе Qdrant.
 
     ``client`` и ``model`` передаются, когда в том же процессе уже открыт
-    индекс выжимок: локальную базу Qdrant можно открыть только одним клиентом.
+    индекс новостей (коллекция ``news``): локальную базу Qdrant можно открыть только одним клиентом.
     """
     location = {"client": client} if client is not None else {"qdrant_path": qdrant_path}
-    return QdrantHybridIndex(
-        AUDIENCE_COLLECTION,
-        **location,
-        model=model,
-        metadata_path=statistics_path(qdrant_path, AUDIENCE_COLLECTION),
-        dense_weight=dense_weight,
-    )
+    return QdrantIndex(AUDIENCE_COLLECTION, **location, model=model)
 
 
 @dataclass(frozen=True)
@@ -101,10 +96,8 @@ class Recommendation:
     title: str | None
     url: str | None
     publication_time: str | None
-    summary: str | None
+    first_paragraph: str | None
     score: float
-    dense: float
-    sparse: float
     matched: dict[str, tuple[str, ...]] = field(default_factory=dict)
     audience: dict[str, list[str]] = field(default_factory=dict)
 
@@ -114,18 +107,17 @@ class NewsRecommender:
 
     def __init__(
         self,
-        index: QdrantHybridIndex | None = None,
+        index: QdrantIndex | None = None,
         *,
-        qdrant_path: str | Path = BASE_DIR / "qdrant_data",
-        dense_weight: float = 0.5,
+        qdrant_path: str | Path = QDRANT_PATH,
     ) -> None:
         """Подключается к коллекции ``news_audience``.
 
         Если ``index`` не передан, открывает локальную базу ``qdrant_path``.
-        Пока её держит другой процесс (например, ``main.py``), открыть её
+        Пока её держит другой процесс (например, ``scripts/run_dedup.py``), открыть её
         нельзя — тогда передайте готовый индекс или используйте сервер Qdrant.
         """
-        self.index = index or open_audience_index(qdrant_path=qdrant_path, dense_weight=dense_weight)
+        self.index = index or open_audience_index(qdrant_path=qdrant_path)
 
     def recommend(
         self,
@@ -148,7 +140,7 @@ class NewsRecommender:
             raise ValueError("Характеристика пользователя пустая: не заполнено ни одно поле шаблона.")
         excluded = set(exclude_ids)
         pool = candidates or max(50, 5 * limit)
-        similar = self.index.find_similar(self.index.encode([text])[0], limit=pool, candidates=pool)
+        similar = self.index.find_similar(self.index.encode([text])[0], limit=pool)
 
         result = []
         for item in similar:
@@ -162,10 +154,8 @@ class NewsRecommender:
                     title=item.payload.get("title"),
                     url=item.payload.get("url"),
                     publication_time=item.payload.get("publication_time"),
-                    summary=item.payload.get("summary"),
+                    first_paragraph=item.payload.get("first_paragraph"),
                     score=item.score,
-                    dense=item.dense,
-                    sparse=item.sparse,
                     matched=profile.matches(AudienceProfile.from_mapping(audience)),
                     audience=audience,
                 )
@@ -219,9 +209,9 @@ def main() -> None:
     source.add_argument("--profile-file", type=Path, help="файл с шаблоном характеристики пользователя")
     parser.add_argument("--role", default="генеральный директор", choices=ROLES)
     parser.add_argument("--limit", type=int, default=5)
-    parser.add_argument("--qdrant-path", type=Path, default=BASE_DIR / "qdrant_data")
-    parser.add_argument("--companies", type=Path, default=BASE_DIR / "dataset" / "ur_lica.csv")
-    parser.add_argument("--payments", type=Path, default=BASE_DIR / "dataset" / "payment.csv")
+    parser.add_argument("--qdrant-path", type=Path, default=QDRANT_PATH)
+    parser.add_argument("--companies", type=Path, default=COMPANIES_CSV)
+    parser.add_argument("--payments", type=Path, default=PAYMENTS_CSV)
     args = parser.parse_args()
 
     if args.company:

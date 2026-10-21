@@ -18,16 +18,12 @@ import re
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Mapping, Sequence
 
+from news_pipeline.references import ROLES as REFERENCE_ROLES
+
 NOT_SPECIFIED = "не указано"
 
-ROLES = (
-    "собственник бизнеса",
-    "генеральный директор",
-    "финансовый директор",
-    "главный бухгалтер",
-    "руководитель казначейства",
-    "другой C-level руководитель",
-)
+# Роли — те же, что в матрице «роль × тема» (config/references/role_topics.json).
+ROLES = REFERENCE_ROLES
 
 # Отрасль -> префиксы кодов ОКВЭД2. Код компании относится к отрасли
 # с самым длинным совпавшим префиксом (46.71 -> «46.7», а не «46»).

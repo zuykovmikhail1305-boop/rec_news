@@ -1,12 +1,9 @@
-news.db
-unique.db
-new_summary.db
+data/
 model/
 dataset/
 texts/
-qdrant_data/
 notebooks/
-qdrant_data.news.bm25.json
+docs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -231,8 +228,6 @@ __marimo__/
 # Локально сохранённые модели эмбеддингов
 models/
 
-# Qdrant-база дедупликации
-qdrant_dedup/
 
 # Кеш ответов LLM
 llm_cache.db

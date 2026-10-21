@@ -13,11 +13,13 @@
 
 Порядок работы:
 
-1. запустите ``python add_test_news.py`` — новости добавятся в ``news.db``;
-2. дождитесь, пока ``news_summarizer.py`` перенесёт их в ``new_summary.db``,
-   а ``main.py`` проведёт дедупликацию;
-3. запустите ``python add_test_news.py --check`` — скрипт сравнит
-   содержимое ``unique.db`` с ожидаемым результатом.
+1. запустите ``python scripts/add_test_news.py`` — новости добавятся в ``data/news.db``;
+2. запустите ``python scripts/prepare_news.py`` — они перейдут в ``new_summary.db``,
+   и дождитесь, пока ``scripts/run_dedup.py`` проведёт дедупликацию;
+3. запустите ``python scripts/add_test_news.py --check`` — скрипт сравнит
+   содержимое ``unique.db`` с ожидаемым результатом: для каждого дубля
+   по ``metadata["sources"]`` оригинала видно, к какой новости он
+   привязан и на каком шаге каскада (exact, url, near, semantic) пойман.
 """
 
 from __future__ import annotations
@@ -26,10 +28,10 @@ import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
-from create_news_db import COFFEE, MUSEUM, SeedNews, near_copy, paragraphs
-from news_db import insert_news, read_ids, summary_ids
+from news_pipeline.config import NEWS_DB, SUMMARY_DB, UNIQUE_DB
+from news_pipeline.test_data.create_news_db import COFFEE, MUSEUM, SeedNews, near_copy, paragraphs
+from news_pipeline.storage.news_db import insert_news, read_ids, read_summaries, summary_ids
 
-BASE_DIR = Path(__file__).resolve().parent
 
 AQUAPARK = SeedNews(
     key="news_101",
@@ -210,7 +212,8 @@ TEST_NEWS = [
         relation="continuation",
         related_key="news_101",
     ),
-    # Шаг 2: копии новостей, которые уже лежат в unique.db
+    # Шаг 2: копии новостей, которые уже лежат в unique.db. Копии выходят
+    # в пределах суток после оригинала, иначе их отсечёт окно по времени
     SeedNews(
         key="news_105",
         title=COFFEE.title,
@@ -226,7 +229,7 @@ TEST_NEWS = [
             ],
         ),
         url="https://news-aggregator.example/economy/kofe-30-procentov",
-        publication_time="2026-10-04T09:00:00",
+        publication_time="2026-09-11T16:00:00",
         relation="near_duplicate",
         related_key="news_012",
     ),
@@ -235,7 +238,7 @@ TEST_NEWS = [
         title="В Курило-Камчатском жёлобе нашли неизвестную науке рыбу",
         text=FISH_SEMANTIC,
         url="https://ocean-today.example/discoveries/pseudoliparis-vetrovi",
-        publication_time="2026-10-04T14:00:00",
+        publication_time="2026-09-10T09:00:00",
         relation="semantic_duplicate",
         related_key="news_010",
     ),
@@ -243,8 +246,8 @@ TEST_NEWS = [
         key="news_107",
         title="Звенигорцы смогут бесплатно кататься на прокатных велосипедах",
         text=BIKES_SEMANTIC,
-        url="https://zven-vedomosti.example/news/2026/10/05/velosipedy-besplatno",
-        publication_time="2026-10-05T10:00:00",
+        url="https://zven-vedomosti.example/news/2026/09/15/velosipedy-besplatno",
+        publication_time="2026-09-15T10:00:00",
         relation="semantic_duplicate",
         related_key="news_014",
     ),
@@ -261,7 +264,7 @@ TEST_NEWS = [
             ],
         ),
         url="https://art-news.example/exhibitions/zvenigorsk-liniya-i-tsvet",
-        publication_time="2026-10-05T16:00:00",
+        publication_time="2026-09-21T16:00:00",
         relation="near_duplicate",
         related_key="news_018",
     ),
@@ -384,26 +387,45 @@ def add(news_db: Path, unique_db: Path) -> None:
     )
 
 
+def duplicate_sources(unique_db: Path) -> dict[str, tuple[str, str, float | None]]:
+    """``{ID дубля: (ID оригинала, шаг каскада, оценка)}`` из ``metadata["sources"]``."""
+    found = {}
+    for news in read_summaries(unique_db):
+        for entry in news.metadata.get("sources", []):
+            if entry.get("method") != "original":
+                found[entry["document_id"]] = (news.document_id, entry["method"], entry.get("score"))
+    return found
+
+
 def check(news_db: Path, unique_db: Path, summary_db: Path) -> None:
     """Сравнивает содержимое unique.db с ожидаемым результатом."""
     pending = (read_ids(news_db) | summary_ids(summary_db)) & TEST_IDS
     if pending:
         print(
             f"Ещё не обработаны: {', '.join(sorted(pending))}. "
-            f"Дождитесь работы news_summarizer.py и main.py."
+            f"Дождитесь работы scripts/prepare_news.py и scripts/run_dedup.py."
         )
         return
 
     unique = summary_ids(unique_db)
+    found = duplicate_sources(unique_db)
     errors = 0
     for item in TEST_NEWS:
         expected_unique = not _is_duplicate(item)
         actual_unique = item.key in unique
-        ok = expected_unique == actual_unique
+        original, method, score = found.get(item.key, (None, None, None))
+        ok = expected_unique == actual_unique and (
+            expected_unique or original == item.related_key
+        )
         errors += not ok
         status = "OK    " if ok else "ОШИБКА"
         expected = "уникальная" if expected_unique else f"дубликат {item.related_key}"
-        actual = "уникальная" if actual_unique else "удалена как дубликат"
+        if actual_unique:
+            actual = "уникальная"
+        elif original is None:
+            actual = "удалена как дубликат (источник не найден в unique.db)"
+        else:
+            actual = f"дубликат {original} [{method}, {score}]"
         print(f"{status} {item.key}: ожидалось «{expected}», получено «{actual}» — {item.title}")
     print(f"\nВерно: {len(TEST_NEWS) - errors} из {len(TEST_NEWS)}.")
 
@@ -411,9 +433,9 @@ def check(news_db: Path, unique_db: Path, summary_db: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--check", action="store_true", help="проверить результат обработки")
-    parser.add_argument("--news-db", type=Path, default=BASE_DIR / "news.db")
-    parser.add_argument("--unique-db", type=Path, default=BASE_DIR / "unique.db")
-    parser.add_argument("--summary-db", type=Path, default=BASE_DIR / "new_summary.db")
+    parser.add_argument("--news-db", type=Path, default=NEWS_DB)
+    parser.add_argument("--unique-db", type=Path, default=UNIQUE_DB)
+    parser.add_argument("--summary-db", type=Path, default=SUMMARY_DB)
     args = parser.parse_args()
     if args.check:
         check(args.news_db, args.unique_db, args.summary_db)

@@ -1,0 +1,95 @@
+# Параметры ML-части: веса, пороги, окна, модели и версии промптов (ТЗ §10).
+# Код читает их через news_pipeline/settings.py; менять значения нужно здесь.
+
+pipeline_version = "0.1.0"
+
+[models]
+embedding = "deepvk/USER-bge-m3"
+# OpenAI-совместимый API: при разработке LM Studio, на хакатоне — разрешённая модель
+llm_base_url = "http://127.0.0.1:1234/v1"
+llm_model = ""            # пусто — первая загруженная модель сервера
+llm_timeout_s = 180
+temperature = 0.0
+
+[prompts]
+aspects = "aspects-v1"
+topics = "topics-v1"
+importance = "importance-v1"
+rerank = "rerank-v1"
+analytics_check = "analytics-check-v1"
+insight = "insight-v1"
+
+[profile]
+min_aspects = 8
+max_aspects = 15
+max_aspect_cosine = 0.90   # аспекты одного пользователя не дублируют друг друга
+# страны ВЭД весят как контрагенты: для импортёра страна поставок не менее важна
+entity_weights = { company = 1.0, competitor = 0.7, counterparty = 0.6, commodity = 0.5, region = 0.3, country = 0.6 }
+
+[news]
+lead_sentences = 3         # лид для эмбеддингов: заголовок + первые 2–3 предложения
+working_window_days = 7
+
+[dedup]
+near_jaccard = 0.75        # MinHash + LSH по шинглам из 4 слов
+event_cosine = 0.82        # косинус заголовка с лидом для «того же события»
+event_window_hours = 48
+entity_jaccard = 0.5       # подтверждение склейки по сущностям
+development_cosine = 0.65  # «развитие события»: похоже, но не дубль; у несвязанных пар косинус ≤ ~0.5
+development_window_days = 21
+
+[ranking]
+candidates_per_aspect = 100
+max_candidates = 500
+rerank_top = 40
+feed_min = 10
+feed_max = 20
+cos_low = 0.70             # растяжение косинуса для сигнала sem
+cos_high = 0.90
+fresh_tau_hours = 24
+weights = { sem = 0.35, ent = 0.25, topic = 0.20, imp = 0.10, fresh = 0.10 }
+llm_mix = 0.6              # final = llm_mix·llm/3 + (1 − llm_mix)·retrieval
+mmr_lambda = 0.7
+max_per_topic_top10 = 3
+
+[analytics]
+# Подбор аналитики к событиям (ТЗ «подбор аналитики к новостям»).
+chunk_min_tokens = 100     # раздел короче — склеивается со следующим
+chunk_max_tokens = 800     # раздел длиннее — режется по абзацам с перекрытием в 1 абзац
+max_age_days = 365         # предфильтр: аналитика старше не ищется
+dense_top = 20
+bm25_top = 20
+rrf_k = 60
+entity_bonus = 0.2         # cand = rrf_norm + 0.2·Jaccard(сущности) + 0.1·cos(темы)
+topic_bonus = 0.1
+max_chunks_per_material = 2
+min_fresh = 0.1            # fresh = exp(−Δt/τ_темы); ниже — кандидат отбрасывается
+rerank_input = 10          # после фильтра актуальности
+judge_top = 5              # фрагментов в одном вызове LLM-судьи
+min_score = 2              # прикрепляется score ≥ 2 и is_outdated = false
+max_per_event = 3
+# Без LLM: top-1 по реранку, если его косинус не ниже порога; связь — «общая тема».
+fallback_min_rerank = 0.75
+refresh_days = 7           # новая аналитика — повторный подбор для событий за 7 дней
+
+# τ свежести, дни, по группам тем таксономии (id тем из config/references/taxonomy.json)
+[analytics.tau_days]
+default = 180
+monetary_policy = 30
+fx = 30
+inflation = 30
+bonds = 30
+macro = 30
+oil_gas = 45
+metals = 45
+mining = 45
+gold = 45
+agro_food = 45
+chemicals = 45
+regulation = 90
+sanctions = 90
+taxes = 90
+budget = 90
+corporate = 60
+stock_market = 60
+banking = 60

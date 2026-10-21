@@ -21,9 +21,10 @@ from pathlib import Path
 from typing import Sequence
 from urllib.parse import urlparse
 
-from news_db import StoredNews, insert_news
+from news_pipeline.config import NEWS_DB
+from news_pipeline.storage.news_db import StoredNews, insert_news
 
-DB_PATH = Path(__file__).with_name("news.db")
+DB_PATH = NEWS_DB
 
 
 @dataclass(frozen=True)

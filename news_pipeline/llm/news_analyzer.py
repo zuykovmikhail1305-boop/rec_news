@@ -19,7 +19,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from audience_profile import (
+from news_pipeline.recommendation.audience_profile import (
     INDUSTRIES,
     AudienceProfile,
     json_schema,
@@ -199,7 +199,12 @@ class ChatClient:
         except urllib.error.HTTPError as error:
             detail = error.read().decode("utf-8", errors="replace")[:500]
             raise LLMError(f"HTTP {error.code} от {self.base_url}{path}: {detail}") from error
-        except (urllib.error.URLError, TimeoutError) as error:
+        except TimeoutError as error:
+            # Перегруженный сервер — повод повторить запрос, а не признак недоступности.
+            raise LLMError(f"таймаут запроса к {self.base_url}{path}: {error}") from error
+        except urllib.error.URLError as error:
+            if isinstance(error.reason, TimeoutError):
+                raise LLMError(f"таймаут запроса к {self.base_url}{path}: {error}") from error
             raise LLMError(f"LLM-сервер {self.base_url} недоступен: {error}") from error
 
 
