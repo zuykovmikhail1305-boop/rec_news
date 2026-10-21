@@ -4,8 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Инсайты · Демонстрация парсера</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/insights.css">
   <link rel="stylesheet" href="/static/parser.css">
 </head>
@@ -13,11 +11,29 @@
   <main class="parser-page">
     <header class="parser-header">
       <div><a class="parser-back" href="/insights/prototype">← К прототипу</a><h1>Как новость становится инсайтом</h1><p>Интерактивная демонстрация воркера news-parser · все события и затраты синтетические</p></div>
-      <div class="run-controls"><span id="run-status" class="run-status idle">Готов к запуску</span><button id="run-button" class="btn btn-primary">▶ Запустить прогон</button></div>
+      <div class="run-controls"><span id="run-status" class="run-status idle" role="status" aria-live="polite">Готов к запуску</span><button id="run-button" class="btn btn-primary">▶ Запустить прогон</button><button id="reset-button" class="trace-toggle">Сбросить</button></div>
     </header>
 
+    <section class="demo-settings" aria-label="Настройки симуляции">
+      <p class="synthetic-notice"><strong>СИНТЕТИЧЕСКОЕ ДЕМО.</strong> Все новости, результаты, счётчики и суммы вымышлены. Реальные тарифы моделей неизвестны; сравнение стоимости не проводилось. Никаких запросов к источникам или LLM.</p>
+      <fieldset id="sources-settings"><legend>Выберите источники (названия — только примеры)</legend>
+        <label><input type="checkbox" name="source" value="Ведомости" checked> Ведомости</label>
+        <label><input type="checkbox" name="source" value="РБК" checked> РБК</label>
+        <label><input type="checkbox" name="source" value="Коммерсантъ" checked> Коммерсантъ</label>
+        <label><input type="checkbox" name="source" value="ТАСС" checked> ТАСС</label>
+        <label><input type="checkbox" name="source" value="Интерфакс" checked> Интерфакс</label>
+        <label><input type="checkbox" name="source" value="Банк России" checked> Банк России</label>
+      </fieldset>
+      <div class="settings-row">
+        <label>Интервал опроса (имитация) <select id="poll-interval"><option value="5">5 минут</option><option value="15" selected>15 минут</option><option value="60">60 минут</option></select></label>
+        <label>Сценарий бюджета <select id="budget-scenario"><option value="normal">Обычный</option><option value="exhausted">Лимит исчерпан</option></select></label>
+      </div>
+      <p id="poll-note"></p>
+      <p>Raw сохранено в памяти демо: <b id="raw-count">0</b> · Отложено до восстановления бюджета: <b id="deferred-count">0</b></p>
+    </section>
+
     <section class="budget-card" aria-label="Дневной бюджет LLM">
-      <div><span class="eyebrow">Бюджетный клапан · общий ключ</span><strong><span id="budget-used">0</span> ₽ <small>из 500 ₽ / день</small></strong></div>
+      <div><span class="eyebrow">Условный бюджет · НЕ реальные расходы</span><strong><span id="budget-used">0</span> ₽ <small>из 500 ₽ / день</small></strong></div>
       <div class="budget-track"><i id="budget-bar"></i></div>
       <p id="budget-note">Сбор и дедупликация не используют LLM. Лимит защищает расходы, а сбор продолжится даже после его достижения.</p>
     </section>
@@ -29,7 +45,7 @@
       <div class="pipeline-arrow">→</div>
       <article class="stage" data-stage="dedupe"><div class="stage-number">3</div><div class="stage-icon">≠</div><div><h2>Дедупликация</h2><p>SHA-256 + fuzzy ≥ 90</p></div><div class="stage-count"><b id="count-unique">0</b><span>уникальных</span></div><div class="stage-state">Ожидание</div></article>
       <div class="pipeline-arrow">→</div>
-      <article class="stage llm" data-stage="gemma"><div class="stage-number">4</div><div class="stage-icon">G</div><div><h2>Gemma</h2><p>Relevance · дешёвый фильтр</p></div><div class="stage-count"><b id="count-relevant">0</b><span>релевантных</span></div><div class="stage-state">Ожидание</div></article>
+      <article class="stage llm" data-stage="gemma"><div class="stage-number">4</div><div class="stage-icon">G</div><div><h2>Gemma</h2><p>Relevance · тариф неизвестен</p></div><div class="stage-count"><b id="count-relevant">0</b><span>релевантных</span></div><div class="stage-state">Ожидание</div></article>
       <div class="pipeline-arrow">→</div>
       <article class="stage llm" data-stage="qwen"><div class="stage-number">5</div><div class="stage-icon">Q</div><div><h2>Qwen</h2><p>Сущности, теги, summary</p></div><div class="stage-count"><b id="count-enriched">0</b><span>обогащено</span></div><div class="stage-state">Ожидание</div></article>
       <div class="pipeline-arrow">→</div>
@@ -39,20 +55,14 @@
     <section class="demo-grid">
       <article class="trace-card">
         <div class="section-title"><div><span class="eyebrow">Трассировка</span><h2>Одна новость — весь путь</h2></div><button id="trace-toggle" class="trace-toggle" aria-expanded="false">Показать детали</button></div>
-        <div class="news-preview"><span class="source-dot"></span><div><b>Ведомости · 10:15</b><h3>Производители упаковки сообщают о росте цен на сырьё</h3><p>Синтетический заголовок для демонстрации: связана с категорией «производство» в профиле клиента.</p></div><span id="trace-result" class="trace-result">Ожидает прогон</span></div>
+        <div class="news-preview"><span class="source-dot"></span><div><b id="trace-source">Пример · синтетическая новость</b><h3>Производители упаковки сообщают о росте цен на сырьё</h3><p>Синтетический заголовок для демонстрации: связана с категорией «производство» в профиле клиента.</p></div><span id="trace-result" class="trace-result">Ожидает прогон</span></div>
         <div id="trace-details" class="trace-details" hidden>
-          <ol>
-            <li><b>Источник → сбор:</b> RSS-адаптер нормализовал title, text, url, published_at; запись создана в <code>news_raw</code>.</li>
-            <li><b>Дедупликация:</b> SHA-256 нового заголовка; похожих материалов за последние 24 часа не найдено.</li>
-            <li><b>Gemma:</b> relevance score <strong>0,91</strong> — материал проходит в каскад по профилю «производство, логистика».</li>
-            <li><b>Qwen:</b> извлечены: «упаковка», «сырьё», «рост цен»; создано краткое резюме и запись <code>news_enriched</code>.</li>
-            <li><b>GLM:</b> сформирован инсайт: «Проверьте условия закупочных контрактов на следующий квартал».</li>
-          </ol>
-          <p class="trace-foot">Связь источника и вывода хранится в <code>news_source_rel</code>; ответ можно проверить до первичного фрагмента.</p>
+          <ol id="trace-log"><li>Запустите симуляцию, чтобы увидеть выполненные шаги.</li></ol>
+          <p class="trace-foot">Это журнал имитации, не запись в реальную БД. Raw остаётся в памяти страницы до сброса, повторного прогона или закрытия.</p>
         </div>
       </article>
 
-      <aside class="explain-card"><span class="eyebrow">Правила воркера</span><h2>Что важно на обсуждении</h2><ul><li>Отдельный процесс и планировщик; FastAPI только читает общую БД.</li><li>Эвристика лишь приоритизирует кандидатов — сырые новости не теряются.</li><li>При исчерпании 500 ₽ LLM-очередь переносится на следующий день.</li><li>Здесь нет сетевых запросов и вызовов моделей: это безопасная имитация.</li></ul><a href="/insights/prototype" class="text-link">Открыть UI инсайтов →</a></aside>
+      <aside class="explain-card"><span class="eyebrow">Правила воркера</span><h2>Что важно на обсуждении</h2><ul><li>Отдельный процесс и планировщик; FastAPI только читает общую БД.</li><li>Эвристика лишь приоритизирует кандидатов — сырые новости не теряются.</li><li>При исчерпании условных 500 ₽ LLM-шаги пропускаются, raw сохраняется, кандидаты откладываются. Возобновление здесь не реализовано.</li><li>Здесь нет сетевых запросов и вызовов моделей: это безопасная имитация.</li></ul><a href="/insights/prototype" class="text-link">Открыть UI инсайтов →</a></aside>
     </section>
   </main>
   <script src="/static/parser.js"></script>

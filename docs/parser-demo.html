@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Инсайты · Демонстрация парсера</title>
+  <style>
+/* =========================================================
+   Инсайты: стили прототипа.
+   Извлечено из alfa-insights-prototype.html (блок <style>) без изменений.
+   ========================================================= */
+:root{
+  --red:#EF3124; --red-dark:#D4202C; --red-soft:#FDECEC;
+  --bg:#F3F4F5; --card:#FFFFFF; --text:#0B1F35; --muted:#6D7986; --line:#E4E6E8; --line2:#EEF0F2;
+  --ai:#7B4DFF; --ai-soft:#F3EEFF;
+  --hyp:#B7791F; --hyp-soft:#FFF7E0; --hyp-line:#E8B53A;
+  --risk:#D4202C; --risk-soft:#FDEDEE;
+  --opp:#0C8A52; --opp-soft:#E6F6EE;
+  --neutral:#56616E; --neutral-soft:#EEF0F2;
+  --radius:16px; --radius-sm:12px;
+  --fs:15px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;font-size:var(--fs);line-height:1.45}
+body.detailed{--fs:16.5px}
+button{font:inherit;cursor:pointer}
+input,select{font:inherit}
+a{color:inherit}
+.hidden{display:none!important}
+
+/* ---------- auth ---------- */
+.auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.auth-card{background:#fff;border-radius:24px;padding:40px;width:100%;max-width:440px;box-shadow:0 8px 32px rgba(11,31,53,.06)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px}
+.brand-mark{width:32px;height:32px;border-radius:9px;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px}
+.brand small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+.auth h1{font-size:26px;margin:28px 0 6px}
+.auth p.sub{color:var(--muted);margin:0 0 24px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.field input,.field select{width:100%;height:52px;border:1px solid var(--line);border-radius:12px;padding:0 16px;background:#F8F9FA;color:var(--text);outline:none}
+.field input:focus,.field select:focus{border-color:var(--text);background:#fff}
+.btn{height:48px;border-radius:12px;border:0;padding:0 20px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary{background:var(--red);color:#fff}
+.btn-primary:hover{background:var(--red-dark)}
+.btn-secondary{background:#F1F2F4;color:var(--text)}
+.btn-secondary:hover{background:#E6E8EB}
+.btn-ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn-sm{height:36px;padding:0 14px;font-size:14px;border-radius:10px}
+.btn-block{width:100%}
+.demo-users{margin-top:24px;border-top:1px solid var(--line);padding-top:18px}
+.demo-users h4{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:500}
+.demo-user{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.demo-user:hover{border-color:var(--text)}
+.demo-user.sel{border-color:var(--red);box-shadow:0 0 0 1px var(--red) inset}
+.ava{width:36px;height:36px;border-radius:50%;background:#E9ECEF;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex:none}
+.demo-user b{display:block;font-size:14px}
+.demo-user span{font-size:12.5px;color:var(--muted)}
+.note{font-size:12.5px;color:var(--muted);margin-top:14px}
+.org{display:flex;align-items:center;gap:14px;width:100%;border:1px solid var(--line);background:#fff;border-radius:14px;padding:16px;margin-bottom:10px;text-align:left}
+.org:hover{border-color:var(--text)}
+.org .ava{border-radius:10px;background:#F1F2F4}
+.org b{display:block}
+.org span{font-size:13px;color:var(--muted)}
+.org .count{margin-left:auto;background:var(--red-soft);color:var(--red-dark);font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap}
+
+/* ---------- shell ---------- */
+.app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+.side{background:#fff;border-right:1px solid var(--line);padding:20px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.side .brand{padding:0 8px 22px}
+.nav a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;text-decoration:none;color:var(--text);font-weight:500;margin-bottom:2px;cursor:pointer}
+.nav a:hover{background:#F3F4F5}
+.nav a.active{background:#F1F2F4;font-weight:600}
+.nav svg{width:20px;height:20px;flex:none;color:#5C6773}
+.nav .badge{margin-left:auto;background:var(--red);color:#fff;font-size:11.5px;font-weight:700;border-radius:10px;padding:1px 7px}
+.nav .ai-tag{font-size:10.5px;font-weight:700;color:var(--ai);background:var(--ai-soft);border-radius:6px;padding:1px 5px}
+.side-foot{margin-top:auto;font-size:12px;color:var(--muted);padding:12px}
+.main{min-width:0}
+.top{height:68px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 28px;position:sticky;top:0;z-index:20}
+.menu-btn{display:none;border:0;background:none;padding:6px}
+.switcher{position:relative}
+.switcher-btn{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:7px 12px;text-align:left;max-width:360px}
+.switcher-btn b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.switcher-btn span{font-size:12px;color:var(--muted)}
+.dropdown{position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(11,31,53,.12);padding:6px;min-width:320px;z-index:30}
+.dropdown button{display:flex;gap:10px;align-items:center;width:100%;border:0;background:none;text-align:left;padding:10px;border-radius:10px}
+.dropdown button:hover{background:#F3F4F5}
+.dropdown b{display:block;font-size:14px}
+.dropdown span{font-size:12px;color:var(--muted)}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.proto-pill{font-size:12px;color:var(--muted);border:1px dashed #C9CED4;border-radius:20px;padding:4px 10px;white-space:nowrap}
+.icon-btn{width:40px;height:40px;border-radius:12px;border:0;background:#F3F4F5;display:flex;align-items:center;justify-content:center}
+.user-chip{display:flex;align-items:center;gap:10px;font-size:14px}
+.user-chip .ava{background:#0B1F35;color:#fff}
+.content{padding:28px;max-width:1280px}
+.page-title{font-size:28px;font-weight:700;margin:0 0 4px;letter-spacing:-.01em}
+.page-sub{color:var(--muted);margin:0 0 22px}
+.card{background:var(--card);border-radius:var(--radius);padding:22px}
+.grid{display:grid;gap:16px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;border-radius:8px;padding:3px 9px;white-space:nowrap}
+.chip.risk{background:var(--risk-soft);color:var(--risk)}
+.chip.opp{background:var(--opp-soft);color:var(--opp)}
+.chip.neutral{background:var(--neutral-soft);color:var(--neutral)}
+.chip.ai{background:var(--ai-soft);color:var(--ai)}
+.chip.bank{background:var(--red-soft);color:var(--red-dark)}
+.chip.nobank{background:var(--hyp-soft);color:var(--hyp)}
+.chip.plain{background:#F1F2F4;color:#3C4753;font-weight:500}
+.chip.conf-ok{background:#E8F2FF;color:#1C5DB8}
+.chip.conf-one{background:#F1F2F4;color:#56616E}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+
+/* home */
+.hero-insight{background:linear-gradient(0deg,#fff,#fff);border-radius:20px;padding:24px;display:grid;grid-template-columns:1fr auto;gap:20px;border:1px solid var(--line);position:relative;overflow:hidden}
+.hero-insight:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--red)}
+.hero-insight .kicker{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);font-weight:600;margin-bottom:10px}
+.hero-insight h2{margin:0 0 8px;font-size:21px;line-height:1.3}
+.hero-insight p{margin:0 0 14px;color:#3C4753}
+.hero-side{display:flex;flex-direction:column;gap:8px;align-items:flex-end;justify-content:space-between}
+.accounts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.acc{background:#fff;border-radius:var(--radius);padding:20px}
+.acc span{color:var(--muted);font-size:13px}
+.acc b{display:block;font-size:22px;margin-top:6px}
+.quick{display:flex;gap:10px;flex-wrap:wrap}
+.quick button{background:#fff;border:0;border-radius:14px;padding:14px 18px;font-weight:600;display:flex;gap:10px;align-items:center}
+.ops{width:100%;border-collapse:collapse}
+.ops td{padding:12px 0;border-bottom:1px solid var(--line2);font-size:14px}
+.ops td:last-child{text-align:right;font-weight:600}
+.ops tr:last-child td{border-bottom:0}
+.section-h{display:flex;align-items:center;justify-content:space-between;margin:26px 0 12px}
+.section-h h3{margin:0;font-size:18px}
+
+/* feed */
+.feed-layout{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+.brief{background:#0B1F35;color:#fff;border-radius:20px;padding:22px 24px;margin-bottom:16px}
+.brief .kicker{font-size:13px;opacity:.7;display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.brief p{margin:0;font-size:16.5px;line-height:1.5}
+.brief .chip.ai{background:rgba(255,255,255,.12);color:#fff}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.seg{display:inline-flex;background:#E9EBEE;border-radius:12px;padding:3px}
+.seg button{border:0;background:none;border-radius:9px;padding:7px 12px;font-size:13.5px;font-weight:500;color:#3C4753}
+.seg button.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.filter{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 12px;font-size:13.5px;font-weight:500}
+.filter.on{background:var(--text);color:#fff;border-color:var(--text)}
+.icard{background:#fff;border-radius:var(--radius);padding:20px 22px;margin-bottom:12px;cursor:pointer;border:1px solid transparent;transition:border-color .15s}
+.icard:hover{border-color:#CDD2D7}
+.icard .meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.icard h3{margin:0 0 6px;font-size:18px;line-height:1.32}
+.icard p{margin:0;color:#3C4753}
+.icard .foot{display:flex;gap:14px;align-items:center;margin-top:14px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.icard .prio{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+.prio-high{background:var(--red)} .prio-medium{background:#F0A400} .prio-low{background:#B8C0C8}
+.icard .affects{font-size:13px;color:var(--muted);margin-top:8px}
+.empty{background:#fff;border-radius:var(--radius);padding:28px;text-align:center;color:var(--muted)}
+.panel h4{margin:0 0 4px;font-size:15px}
+.panel .hint{font-size:13px;color:var(--muted);margin:0 0 12px}
+.feat{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line2);font-size:13.5px}
+.feat:last-child{border-bottom:0}
+.feat .k{color:var(--muted);min-width:92px}
+.disclaimer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;margin-top:22px}
+
+/* insight detail */
+.detail-layout{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start}
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-weight:500;cursor:pointer;margin-bottom:14px;border:0;background:none;padding:0}
+.d-head h1{font-size:26px;line-height:1.25;margin:10px 0 6px;letter-spacing:-.01em}
+.d-head .date{color:var(--muted);font-size:13.5px}
+.layer{border-radius:var(--radius-sm);padding:16px 18px;margin-top:14px;position:relative}
+.layer .lh{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px}
+.layer .q{font-size:13px;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0;margin-left:auto}
+.layer p{margin:0}
+.layer.fact{background:#F5F6F7}
+.layer.fact .lh{color:#3C4753}
+.layer.bank{background:#fff;border:1px solid var(--line);border-left:4px solid var(--red)}
+.layer.bank .lh{color:var(--red-dark)}
+.layer.nobank{background:var(--hyp-soft);border:1px solid #F3DDA0}
+.layer.nobank .lh{color:var(--hyp)}
+.layer.ai{background:var(--ai-soft)}
+.layer.ai .lh{color:var(--ai)}
+.layer.hyp{background:#fff;border:1.5px dashed var(--hyp-line)}
+.layer.hyp .lh{color:var(--hyp)}
+.cite{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:5px;background:#E2E5E9;font-size:11px;font-weight:700;color:#3C4753;margin-left:3px;vertical-align:2px;cursor:pointer;padding:0 4px}
+.cite:hover{background:var(--text);color:#fff}
+.quote{font-size:13.5px;color:#3C4753;border-left:3px solid #D5D9DE;padding:4px 0 4px 10px;margin-top:10px}
+.feat-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.ro{border-radius:var(--radius-sm);padding:16px 18px;background:#fff;border:1px solid var(--line)}
+.ro h4{margin:0 0 8px;display:flex;align-items:center;gap:8px;font-size:15px}
+.ro ul{margin:0;padding-left:18px}
+.ro li{margin:5px 0}
+.ro.risk h4{color:var(--risk)} .ro.opp h4{color:var(--opp)}
+.actions{background:#fff;border-radius:var(--radius-sm);padding:16px 18px;margin-top:14px;border:1px solid var(--line)}
+.actions h4{margin:0 0 10px;font-size:15px}
+.check{display:flex;gap:10px;align-items:flex-start;padding:6px 0}
+.check input{margin-top:3px;accent-color:var(--red);width:16px;height:16px}
+.offer{display:flex;gap:16px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px 18px;margin-top:14px}
+.offer .tag{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.offer b{display:block;margin:2px 0}
+.offer span{font-size:13.5px;color:var(--muted)}
+.offer .btn{margin-left:auto;flex:none}
+.basis{background:#fff;border-radius:var(--radius-sm);padding:16px 18px;margin-top:14px;border:1px solid var(--line)}
+.basis h4{margin:0 0 6px;font-size:15px}
+.src{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line2)}
+.src:last-of-type{border-bottom:0}
+.src .n{width:22px;height:22px;border-radius:6px;background:#E2E5E9;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+.src b{font-size:14px}
+.src .tier{font-size:11px;font-weight:700;border-radius:5px;padding:1px 6px;margin-left:6px}
+.t-A{background:#E6F6EE;color:var(--opp)} .t-B{background:#E8F2FF;color:#1C5DB8} .t-C{background:var(--hyp-soft);color:var(--hyp)} .t-D{background:#F1F2F4;color:#56616E} .t-R{background:var(--red-soft);color:var(--red-dark)}
+.src .qt{font-size:13px;color:#3C4753;margin-top:4px}
+.src .lnk{font-size:13px;color:#1C5DB8;text-decoration:none;font-weight:500}
+.feedback{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:18px}
+.feedback .lbl{color:var(--muted);font-size:14px;margin-right:4px}
+.fb{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;font-size:14px;font-weight:500}
+.fb.on{background:var(--text);color:#fff;border-color:var(--text)}
+
+/* chat */
+.chat{background:#fff;border-radius:var(--radius);display:flex;flex-direction:column;position:sticky;top:88px;max-height:calc(100vh - 108px)}
+.chat-h{padding:16px 18px;border-bottom:1px solid var(--line2)}
+.chat-h b{display:flex;align-items:center;gap:8px}
+.chat-h span{font-size:12.5px;color:var(--muted)}
+.chat-body{padding:14px 16px;overflow:auto;flex:1;min-height:200px}
+.msg{margin-bottom:12px;max-width:92%;font-size:14px}
+.msg.me{margin-left:auto;background:#0B1F35;color:#fff;border-radius:14px 14px 4px 14px;padding:10px 12px}
+.msg.bot{background:#F5F6F7;border-radius:14px 14px 14px 4px;padding:12px}
+.msg.bot .ml{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 3px}
+.msg.bot .ml:first-child{margin-top:0}
+.msg.bot .ml.f{color:#3C4753} .msg.bot .ml.b{color:var(--red-dark)} .msg.bot .ml.a{color:var(--ai)} .msg.bot .ml.h{color:var(--hyp)}
+.msg.bot .dis{font-size:11.5px;color:var(--muted);margin-top:8px;border-top:1px solid #E4E6E8;padding-top:6px}
+.sugg{display:flex;flex-direction:column;gap:6px;padding:0 16px 10px}
+.sugg button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;font-size:13px;text-align:left}
+.sugg button:hover{border-color:var(--text)}
+.chat-in{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line2)}
+.chat-in input{flex:1;height:42px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#F8F9FA;outline:none}
+.chat-in button{width:42px;height:42px;border-radius:10px;border:0;background:var(--red);color:#fff}
+.typing{display:inline-flex;gap:4px}
+.typing i{width:6px;height:6px;border-radius:50%;background:#9AA4AE;animation:b 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes b{0%,80%,100%{opacity:.3}40%{opacity:1}}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(11,31,53,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal{background:#fff;border-radius:20px;max-width:720px;width:100%;max-height:88vh;overflow:auto;padding:26px}
+.modal h2{margin:0 0 4px;font-size:21px}
+.modal .sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+.step{display:grid;grid-template-columns:28px 1fr;gap:12px;padding:10px 0;position:relative}
+.step .num{width:28px;height:28px;border-radius:50%;background:#F1F2F4;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700}
+.step.ok .num{background:var(--opp-soft);color:var(--opp)}
+.step.warn .num{background:var(--hyp-soft);color:var(--hyp)}
+.step b{display:block;font-size:14.5px}
+.step code{font-size:12.5px;background:#F5F6F7;border-radius:6px;padding:2px 6px;color:#3C4753}
+.step .d{font-size:13.5px;color:#3C4753;margin-top:3px}
+.step .m{font-size:12px;color:var(--muted);margin-top:3px}
+
+/* sources page */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.tabs button{border:0;background:none;padding:10px 14px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--text);border-color:var(--red);font-weight:600}
+.tbl{width:100%;border-collapse:collapse;background:#fff;border-radius:var(--radius);overflow:hidden}
+.tbl th{text-align:left;font-size:12.5px;color:var(--muted);font-weight:600;padding:12px 16px;border-bottom:1px solid var(--line);background:#FAFBFB}
+.tbl td{padding:13px 16px;border-bottom:1px solid var(--line2);font-size:14px;vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.status-ok{color:var(--opp);font-weight:600;font-size:13px}
+.ingest{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.pipe{margin-top:14px}
+.pipe .ps{display:flex;gap:10px;align-items:center;padding:6px 0;font-size:14px;color:var(--muted)}
+.pipe .ps .ic{width:20px;height:20px;border-radius:50%;border:2px solid #D5D9DE;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px}
+.pipe .ps.run{color:var(--text);font-weight:600}
+.pipe .ps.run .ic{border-color:var(--red);border-top-color:transparent;animation:spin .8s linear infinite}
+.pipe .ps.done{color:var(--text)}
+.pipe .ps.done .ic{border-color:var(--opp);background:var(--opp);color:#fff}
+@keyframes spin{to{transform:rotate(360deg)}}
+.result{margin-top:14px;border-radius:14px;background:#F5F6F7;padding:16px}
+.result .kv{display:flex;justify-content:space-between;font-size:14px;padding:4px 0}
+
+/* settings */
+.set-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--line2)}
+.set-row:last-child{border-bottom:0}
+.set-row .t b{display:block}
+.set-row .t span{font-size:13px;color:var(--muted)}
+.toggle{position:relative;width:44px;height:26px;flex:none}
+.toggle input{opacity:0;width:0;height:0}
+.toggle span{position:absolute;inset:0;background:#D5D9DE;border-radius:20px;transition:.2s;cursor:pointer}
+.toggle span:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle input:checked+span{background:var(--red)}
+.toggle input:checked+span:before{transform:translateX(18px)}
+.set-row select{height:40px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:#fff}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0B1F35;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.demo-banner{background:#FFF7E0;color:#7A5300;font-size:12.5px;padding:7px 28px;border-bottom:1px solid #F3DDA0}
+
+@media (max-width:1100px){
+  .feed-layout,.detail-layout{grid-template-columns:1fr}
+  .chat{position:static;max-height:none}
+}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr}
+  .side{position:fixed;left:0;top:0;z-index:40;transform:translateX(-100%);transition:.2s;width:260px;box-shadow:0 0 40px rgba(0,0,0,.15)}
+  .side.open{transform:none}
+  .menu-btn{display:block}
+  .top{padding:0 16px}
+  .content{padding:18px 16px}
+  .proto-pill,.user-chip .nm{display:none}
+  .switcher-btn{max-width:170px}
+  .top{gap:8px}
+  .top-right{gap:8px}
+  .top-right .icon-btn{display:none}
+  .top-right .btn-ghost{padding:0 10px}
+  .hero-insight{grid-template-columns:1fr}
+  .hero-side{align-items:flex-start}
+  .two,.ingest{grid-template-columns:1fr}
+  .auth-card{padding:28px 22px}
+  .tbl{display:block;overflow-x:auto}
+  .demo-banner{padding:7px 16px}
+}
+</style>
+  <style>
+.parser-body{background:#f3f4f5}.parser-page{max-width:1440px;margin:0 auto;padding:36px 32px 48px}.parser-header{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;margin-bottom:24px}.parser-header h1{font-size:32px;letter-spacing:-.03em;margin:8px 0}.parser-header p{color:var(--muted);margin:0}.parser-back,.text-link{color:#1c5db8;text-decoration:none;font-size:14px;font-weight:600}.run-controls{display:flex;align-items:center;gap:12px}.run-status{font-size:13px;font-weight:600;padding:7px 11px;border-radius:20px;background:#eef0f2;color:#56616e}.run-status.running{background:#fff7e0;color:#9a6812}.run-status.done{background:#e6f6ee;color:#0c8a52}.budget-card{display:grid;grid-template-columns:250px 1fr;gap:16px;align-items:center;background:#0b1f35;color:#fff;border-radius:18px;padding:20px 24px;margin-bottom:22px}.budget-card .eyebrow{color:#b9c3cd}.budget-card strong{display:block;font-size:25px;margin-top:3px}.budget-card strong small{font-size:13px;color:#b9c3cd;font-weight:500}.budget-card p{grid-column:2;margin:0;color:#cbd3db;font-size:13px}.budget-track{height:9px;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}.budget-track i{display:block;height:100%;width:0;background:#ef3124;border-radius:inherit;transition:width .45s}.pipeline{display:grid;grid-template-columns:repeat(11,max-content);gap:8px;align-items:stretch;overflow-x:auto;padding:4px 0 14px}.pipeline-arrow{align-self:center;font-size:22px;color:#9aa4ae}.stage{width:195px;min-height:192px;position:relative;background:#fff;border:1px solid #e4e6e8;border-radius:16px;padding:18px 16px;display:flex;flex-direction:column;gap:7px;transition:.25s}.stage.llm .stage-icon{background:#f3eeff;color:#7b4dff}.stage.active{border-color:#e8b53a;box-shadow:0 0 0 3px #fff7e0}.stage.complete{border-color:#9fd9bd}.stage.complete .stage-state{color:#0c8a52}.stage-number{font-size:12px;color:#6d7986;font-weight:700}.stage-icon{width:32px;height:32px;background:#f1f2f4;border-radius:9px;display:grid;place-items:center;font-weight:700}.stage h2{margin:1px 0 0;font-size:16px}.stage p{margin:0;color:#6d7986;font-size:12px;min-height:35px}.stage-count{margin-top:auto;display:flex;align-items:baseline;gap:5px}.stage-count b{font-size:27px}.stage-count span,.stage-state{font-size:12px;color:#6d7986}.stage-state{font-weight:600}.demo-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,.7fr);gap:18px}.trace-card,.explain-card{background:#fff;border-radius:18px;padding:22px}.section-title{display:flex;justify-content:space-between;gap:16px;align-items:start}.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:#6d7986}.section-title h2,.explain-card h2{margin:4px 0 16px;font-size:20px}.trace-toggle{border:1px solid #e4e6e8;background:#fff;border-radius:10px;padding:8px 11px;font-size:13px;font-weight:600}.news-preview{display:flex;align-items:flex-start;gap:11px;background:#f8f9fa;border-radius:13px;padding:15px}.news-preview b{font-size:12px;color:#6d7986}.news-preview h3{font-size:16px;line-height:1.35;margin:3px 0}.news-preview p{font-size:13px;margin:0;color:#56616e}.source-dot{margin-top:5px;width:9px;height:9px;border-radius:50%;background:#ef3124;flex:none}.trace-result{margin-left:auto;white-space:nowrap;font-size:12px;font-weight:600;background:#eef0f2;color:#56616e;padding:5px 8px;border-radius:8px}.trace-result.ready{background:#e6f6ee;color:#0c8a52}.trace-details{border-top:1px solid #eef0f2;margin-top:16px;padding-top:4px}.trace-details ol{margin:8px 0;padding-left:22px}.trace-details li{margin:11px 0;font-size:14px}.trace-foot{font-size:13px;color:#6d7986;margin:13px 0 0}.trace-details code{font-size:12px;background:#f1f2f4;padding:2px 4px;border-radius:4px}.explain-card{border:1px solid #e4e6e8}.explain-card ul{padding-left:19px;margin:0 0 20px}.explain-card li{font-size:14px;margin:11px 0;color:#3c4753}@media(max-width:850px){.parser-page{padding:24px 16px}.parser-header,.demo-grid{grid-template-columns:1fr;display:grid}.run-controls{justify-content:space-between}.budget-card{grid-template-columns:1fr}.budget-card p{grid-column:auto}.pipeline{margin-right:-16px}.news-preview{flex-wrap:wrap}.trace-result{margin-left:20px}}.demo-settings{background:white;border-radius:18px;padding:20px 24px;margin-bottom:20px}.synthetic-notice{background:#fff7e0;border:1px solid #e8b53a;border-radius:10px;padding:12px;margin-top:0}.demo-settings fieldset{border:1px solid #e4e6e8;border-radius:10px;display:flex;flex-wrap:wrap;gap:12px;padding:14px}.demo-settings label{display:inline-flex;align-items:center;gap:7px}.settings-row{display:flex;flex-wrap:wrap;gap:20px;margin-top:16px}.settings-row select{padding:7px;border-radius:6px}.demo-settings p{font-size:14px}.stage.deferred{border-color:#e8b53a;background:#fffaf0}.stage.deferred .stage-state{color:#9a6812}.run-controls{flex-wrap:wrap}button:disabled{cursor:wait;opacity:.65}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #1c5db8;outline-offset:3px}
+
+</style>
+</head>
+<body class="parser-body">
+  <main class="parser-page">
+    <header class="parser-header">
+      <div><span class="parser-back">Автономное демо · без сервера</span><h1>Как новость становится инсайтом</h1><p>Интерактивная демонстрация воркера news-parser · все события и затраты синтетические</p></div>
+      <div class="run-controls"><span id="run-status" class="run-status idle" role="status" aria-live="polite">Готов к запуску</span><button id="run-button" class="btn btn-primary">▶ Запустить прогон</button><button id="reset-button" class="trace-toggle">Сбросить</button></div>
+    </header>
+
+    <section class="demo-settings" aria-label="Настройки симуляции">
+      <p class="synthetic-notice"><strong>СИНТЕТИЧЕСКОЕ ДЕМО.</strong> Все новости, результаты, счётчики и суммы вымышлены. Реальные тарифы моделей неизвестны; сравнение стоимости не проводилось. Никаких запросов к источникам или LLM.</p>
+      <fieldset id="sources-settings"><legend>Выберите источники (названия — только примеры)</legend>
+        <label><input type="checkbox" name="source" value="Ведомости" checked> Ведомости</label>
+        <label><input type="checkbox" name="source" value="РБК" checked> РБК</label>
+        <label><input type="checkbox" name="source" value="Коммерсантъ" checked> Коммерсантъ</label>
+        <label><input type="checkbox" name="source" value="ТАСС" checked> ТАСС</label>
+        <label><input type="checkbox" name="source" value="Интерфакс" checked> Интерфакс</label>
+        <label><input type="checkbox" name="source" value="Банк России" checked> Банк России</label>
+      </fieldset>
+      <div class="settings-row">
+        <label>Интервал опроса (имитация) <select id="poll-interval"><option value="5">5 минут</option><option value="15" selected>15 минут</option><option value="60">60 минут</option></select></label>
+        <label>Сценарий бюджета <select id="budget-scenario"><option value="normal">Обычный</option><option value="exhausted">Лимит исчерпан</option></select></label>
+      </div>
+      <p id="poll-note"></p>
+      <p>Raw сохранено в памяти демо: <b id="raw-count">0</b> · Отложено до восстановления бюджета: <b id="deferred-count">0</b></p>
+    </section>
+
+    <section class="budget-card" aria-label="Дневной бюджет LLM">
+      <div><span class="eyebrow">Условный бюджет · НЕ реальные расходы</span><strong><span id="budget-used">0</span> ₽ <small>из 500 ₽ / день</small></strong></div>
+      <div class="budget-track"><i id="budget-bar"></i></div>
+      <p id="budget-note">Сбор и дедупликация не используют LLM. Лимит защищает расходы, а сбор продолжится даже после его достижения.</p>
+    </section>
+
+    <section class="pipeline" aria-label="Пайплайн обработки новостей">
+      <article class="stage" data-stage="sources"><div class="stage-number">1</div><div class="stage-icon">◌</div><div><h2>Источники</h2><p>RSS и HTML · по расписанию</p></div><div class="stage-count"><b id="count-sources">6</b><span>источников</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage" data-stage="collect"><div class="stage-number">2</div><div class="stage-icon">↓</div><div><h2>Сбор</h2><p>Нормализация в news_raw</p></div><div class="stage-count"><b id="count-collected">0</b><span>новостей</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage" data-stage="dedupe"><div class="stage-number">3</div><div class="stage-icon">≠</div><div><h2>Дедупликация</h2><p>SHA-256 + fuzzy ≥ 90</p></div><div class="stage-count"><b id="count-unique">0</b><span>уникальных</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage llm" data-stage="gemma"><div class="stage-number">4</div><div class="stage-icon">G</div><div><h2>Gemma</h2><p>Relevance · тариф неизвестен</p></div><div class="stage-count"><b id="count-relevant">0</b><span>релевантных</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage llm" data-stage="qwen"><div class="stage-number">5</div><div class="stage-icon">Q</div><div><h2>Qwen</h2><p>Сущности, теги, summary</p></div><div class="stage-count"><b id="count-enriched">0</b><span>обогащено</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage llm" data-stage="glm"><div class="stage-number">6</div><div class="stage-icon">AI</div><div><h2>GLM</h2><p>Инсайт для профиля клиента</p></div><div class="stage-count"><b id="count-insights">0</b><span>инсайтов</span></div><div class="stage-state">Ожидание</div></article>
+    </section>
+
+    <section class="demo-grid">
+      <article class="trace-card">
+        <div class="section-title"><div><span class="eyebrow">Трассировка</span><h2>Одна новость — весь путь</h2></div><button id="trace-toggle" class="trace-toggle" aria-expanded="false">Показать детали</button></div>
+        <div class="news-preview"><span class="source-dot"></span><div><b id="trace-source">Пример · синтетическая новость</b><h3>Производители упаковки сообщают о росте цен на сырьё</h3><p>Синтетический заголовок для демонстрации: связана с категорией «производство» в профиле клиента.</p></div><span id="trace-result" class="trace-result">Ожидает прогон</span></div>
+        <div id="trace-details" class="trace-details" hidden>
+          <ol id="trace-log"><li>Запустите симуляцию, чтобы увидеть выполненные шаги.</li></ol>
+          <p class="trace-foot">Это журнал имитации, не запись в реальную БД. Raw остаётся в памяти страницы до сброса, повторного прогона или закрытия.</p>
+        </div>
+      </article>
+
+      <aside class="explain-card"><span class="eyebrow">Правила воркера</span><h2>Что важно на обсуждении</h2><ul><li>Отдельный процесс и планировщик; FastAPI только читает общую БД.</li><li>Эвристика лишь приоритизирует кандидатов — сырые новости не теряются.</li><li>При исчерпании условных 500 ₽ LLM-шаги пропускаются, raw сохраняется, кандидаты откладываются. Возобновление здесь не реализовано.</li><li>Здесь нет сетевых запросов и вызовов моделей: это безопасная имитация.</li></ul><span class="text-link">Полный UI доступен при запуске FastAPI</span></aside>
+    </section>
+  </main>
+  <script>
+(() => {
+  'use strict';
+  const $ = selector => document.querySelector(selector);
+  const inputs = [...document.querySelectorAll('[name="source"]')];
+  const settings = [...inputs, $('#poll-interval'), $('#budget-scenario')];
+  const keys = ['sources', 'collect', 'dedupe', 'gemma', 'qwen', 'glm'];
+  const counters = ['sources', 'collected', 'unique', 'relevant', 'enriched', 'insights'];
+  let generation = 0;
+  let running = false;
+  let raw = [];
+  const selected = () => inputs.filter(input => input.checked).map(input => input.value);
+  function budget(value) {
+    $('#budget-used').textContent = value;
+    $('#budget-bar').style.width = `${Math.min(100, value / 5)}%`;
+  }
+  function log(text) {
+    const item = document.createElement('li');
+    item.textContent = text;
+    $('#trace-log').append(item);
+  }
+  function reset() {
+    generation++;
+    running = false;
+    raw = [];
+    settings.forEach(input => { input.disabled = false; });
+    keys.forEach((key, index) => {
+      const card = $(`[data-stage="${key}"]`);
+      card.classList.remove('active', 'complete', 'deferred');
+      card.querySelector('.stage-state').textContent = 'Ожидание';
+      $(`#count-${counters[index]}`).textContent = index === 0 ? selected().length : 0;
+    });
+    budget($('#budget-scenario').value === 'exhausted' ? 500 : 0);
+    $('#raw-count').textContent = '0';
+    $('#deferred-count').textContent = '0';
+    $('#trace-result').textContent = 'Ожидает прогон';
+    $('#trace-result').classList.remove('ready');
+    $('#trace-source').textContent = `${selected()[0] || 'Нет источников'} · синтетическая новость`;
+    $('#trace-log').replaceChildren();
+    log('Запустите симуляцию, чтобы увидеть выполненные шаги.');
+    $('#trace-details').hidden = true;
+    $('#trace-toggle').textContent = 'Показать детали';
+    $('#trace-toggle').setAttribute('aria-expanded', 'false');
+    $('#run-status').textContent = 'Готов к запуску';
+    $('#run-status').className = 'run-status idle';
+    $('#run-button').disabled = false;
+    $('#run-button').textContent = '▶ Запустить прогон';
+    $('#poll-note').textContent = `Условный опрос раз в ${$('#poll-interval').value} мин. Один ручной прогон = один цикл; автоматического таймера и ожидания этого интервала нет.`;
+  }
+  async function run() {
+    if (running) return;
+    reset();
+    const sources = selected();
+    if (!sources.length) {
+      $('#run-status').textContent = 'Выберите хотя бы один источник';
+      $('#trace-result').textContent = 'Нет данных';
+      $('#trace-log').replaceChildren();
+      log('Источники не выбраны: сбор и LLM не запускались.');
+      return;
+    }
+    const token = generation;
+    const exhausted = $('#budget-scenario').value === 'exhausted';
+    running = true;
+    settings.forEach(input => { input.disabled = true; });
+    $('#run-button').disabled = true;
+    $('#run-button').textContent = 'Прогон выполняется…';
+    $('#run-status').textContent = 'Симуляция одного цикла';
+    $('#run-status').className = 'run-status running';
+    $('#trace-log').replaceChildren();
+    const n = sources.length;
+    // Deterministic fixtures, not estimates of real source volume or model performance.
+    const unique = n * 6 - 1;
+    const relevant = n + 2;
+    const values = [n, n * 7, unique, relevant, relevant, Math.ceil(n / 2)];
+    const costs = [0, 0, 0, 18, 53, 26];
+    const messages = [
+      `Источники: ${sources.join(', ')}. Интервал ${$('#poll-interval').value} мин — только условная настройка.`,
+      `Сбор: ${values[1]} синтетических записей news_raw сохранены в памяти страницы.`,
+      `Дедупликация (имитация): ${unique} уникальных, ${values[1] - unique} дублей. Raw не удалён.`,
+      `Gemma (имитация): ${relevant} релевантных. Пример score 0,91; условно +18 ₽, не тариф.`,
+      `Qwen (имитация): ${relevant} обогащённых. Теги: упаковка, сырьё, рост цен; условно +53 ₽.`,
+      `GLM (имитация): ${values[5]} инсайтов. Пример: проверьте условия закупочных контрактов; условно +26 ₽.`
+    ];
+    let spent = exhausted ? 500 : 0;
+    for (let index = 0; index < keys.length; index++) {
+      const card = $(`[data-stage="${keys[index]}"]`);
+      if (exhausted && index >= 3) {
+        card.classList.add('deferred');
+        card.querySelector('.stage-state').textContent = 'Пропущено: лимит';
+        log(`${keys[index].toUpperCase()}: не выполнялся — условный бюджет исчерпан.`);
+        continue;
+      }
+      card.classList.add('active');
+      card.querySelector('.stage-state').textContent = 'Имитация…';
+      await new Promise(resolve => setTimeout(resolve, 400));
+      if (token !== generation) return; // Reset/replay invalidates every older continuation.
+      if (index === 1) {
+        raw = sources.flatMap(source => Array.from({ length: 7 }, (_, i) => ({ source, id: `${source}-${i}`, title: 'Синтетическая новость' })));
+        $('#raw-count').textContent = raw.length;
+      }
+      $(`#count-${counters[index]}`).textContent = values[index];
+      spent += costs[index];
+      budget(spent);
+      card.classList.remove('active');
+      card.classList.add('complete');
+      card.querySelector('.stage-state').textContent = 'Имитация завершена';
+      log(messages[index]);
+    }
+    $('#deferred-count').textContent = exhausted ? unique : 0;
+    $('#trace-result').textContent = exhausted ? 'Отложено: лимит LLM' : 'Синтетический инсайт готов';
+    $('#trace-result').classList.toggle('ready', !exhausted);
+    $('#run-status').textContent = exhausted
+      ? `Raw сохранён · отложено ${unique} · новых расходов 0 ₽ (условно)`
+      : 'Прогон завершён · условно 97 ₽ (не реальные расходы)';
+    $('#run-status').className = 'run-status done';
+    $('#run-button').textContent = '↻ Запустить заново';
+    $('#run-button').disabled = false;
+    settings.forEach(input => { input.disabled = false; });
+    running = false;
+  }
+  $('#run-button').addEventListener('click', run);
+  $('#reset-button').addEventListener('click', reset);
+  settings.forEach(input => input.addEventListener('change', reset));
+  $('#trace-toggle').addEventListener('click', () => {
+    const details = $('#trace-details');
+    details.hidden = !details.hidden;
+    $('#trace-toggle').textContent = details.hidden ? 'Показать детали' : 'Скрыть детали';
+    $('#trace-toggle').setAttribute('aria-expanded', String(!details.hidden));
+  });
+  reset();
+})();
+
+</script>
+</body>
+</html>

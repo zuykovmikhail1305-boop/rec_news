@@ -1,72 +1,130 @@
 (() => {
-  const stages = [
-    { key: 'sources', count: 'count-sources', value: 6, label: '6 источников подключены', cost: 0 },
-    { key: 'collect', count: 'count-collected', value: 42, label: '42 новости собраны', cost: 0 },
-    { key: 'dedupe', count: 'count-unique', value: 35, label: '7 дублей объединено', cost: 0 },
-    { key: 'gemma', count: 'count-relevant', value: 8, label: '8 релевантных материалов', cost: 18 },
-    { key: 'qwen', count: 'count-enriched', value: 8, label: '8 материалов обогащено', cost: 53 },
-    { key: 'glm', count: 'count-insights', value: 3, label: '3 инсайта готовы', cost: 26 }
-  ];
-  const $ = (selector) => document.querySelector(selector);
-  const runButton = $('#run-button');
-  const status = $('#run-status');
+  'use strict';
+  const $ = selector => document.querySelector(selector);
+  const inputs = [...document.querySelectorAll('[name="source"]')];
+  const settings = [...inputs, $('#poll-interval'), $('#budget-scenario')];
+  const keys = ['sources', 'collect', 'dedupe', 'gemma', 'qwen', 'glm'];
+  const counters = ['sources', 'collected', 'unique', 'relevant', 'enriched', 'insights'];
+  let generation = 0;
   let running = false;
-
+  let raw = [];
+  const selected = () => inputs.filter(input => input.checked).map(input => input.value);
+  function budget(value) {
+    $('#budget-used').textContent = value;
+    $('#budget-bar').style.width = `${Math.min(100, value / 5)}%`;
+  }
+  function log(text) {
+    const item = document.createElement('li');
+    item.textContent = text;
+    $('#trace-log').append(item);
+  }
   function reset() {
-    stages.forEach(({ key, count, value }) => {
-      const card = document.querySelector(`[data-stage="${key}"]`);
-      card.classList.remove('active', 'complete');
-      $(`#${count}`).textContent = key === 'sources' ? value : 0;
+    generation++;
+    running = false;
+    raw = [];
+    settings.forEach(input => { input.disabled = false; });
+    keys.forEach((key, index) => {
+      const card = $(`[data-stage="${key}"]`);
+      card.classList.remove('active', 'complete', 'deferred');
       card.querySelector('.stage-state').textContent = 'Ожидание';
+      $(`#count-${counters[index]}`).textContent = index === 0 ? selected().length : 0;
     });
-    $('#budget-used').textContent = '0';
-    $('#budget-bar').style.width = '0%';
+    budget($('#budget-scenario').value === 'exhausted' ? 500 : 0);
+    $('#raw-count').textContent = '0';
+    $('#deferred-count').textContent = '0';
     $('#trace-result').textContent = 'Ожидает прогон';
     $('#trace-result').classList.remove('ready');
+    $('#trace-source').textContent = `${selected()[0] || 'Нет источников'} · синтетическая новость`;
+    $('#trace-log').replaceChildren();
+    log('Запустите симуляцию, чтобы увидеть выполненные шаги.');
+    $('#trace-details').hidden = true;
+    $('#trace-toggle').textContent = 'Показать детали';
+    $('#trace-toggle').setAttribute('aria-expanded', 'false');
+    $('#run-status').textContent = 'Готов к запуску';
+    $('#run-status').className = 'run-status idle';
+    $('#run-button').disabled = false;
+    $('#run-button').textContent = '▶ Запустить прогон';
+    $('#poll-note').textContent = `Условный опрос раз в ${$('#poll-interval').value} мин. Один ручной прогон = один цикл; автоматического таймера и ожидания этого интервала нет.`;
   }
-
-  function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-  function setBudget(value) {
-    $('#budget-used').textContent = value;
-    $('#budget-bar').style.width = `${value / 5}%`;
-  }
-
   async function run() {
     if (running) return;
-    running = true;
     reset();
-    runButton.disabled = true;
-    runButton.textContent = 'Прогон выполняется…';
-    status.textContent = 'Воркер обрабатывает очередь';
-    status.className = 'run-status running';
-    let budget = 0;
-    for (const stage of stages) {
-      const card = document.querySelector(`[data-stage="${stage.key}"]`);
+    const sources = selected();
+    if (!sources.length) {
+      $('#run-status').textContent = 'Выберите хотя бы один источник';
+      $('#trace-result').textContent = 'Нет данных';
+      $('#trace-log').replaceChildren();
+      log('Источники не выбраны: сбор и LLM не запускались.');
+      return;
+    }
+    const token = generation;
+    const exhausted = $('#budget-scenario').value === 'exhausted';
+    running = true;
+    settings.forEach(input => { input.disabled = true; });
+    $('#run-button').disabled = true;
+    $('#run-button').textContent = 'Прогон выполняется…';
+    $('#run-status').textContent = 'Симуляция одного цикла';
+    $('#run-status').className = 'run-status running';
+    $('#trace-log').replaceChildren();
+    const n = sources.length;
+    // Deterministic fixtures, not estimates of real source volume or model performance.
+    const unique = n * 6 - 1;
+    const relevant = n + 2;
+    const values = [n, n * 7, unique, relevant, relevant, Math.ceil(n / 2)];
+    const costs = [0, 0, 0, 18, 53, 26];
+    const messages = [
+      `Источники: ${sources.join(', ')}. Интервал ${$('#poll-interval').value} мин — только условная настройка.`,
+      `Сбор: ${values[1]} синтетических записей news_raw сохранены в памяти страницы.`,
+      `Дедупликация (имитация): ${unique} уникальных, ${values[1] - unique} дублей. Raw не удалён.`,
+      `Gemma (имитация): ${relevant} релевантных. Пример score 0,91; условно +18 ₽, не тариф.`,
+      `Qwen (имитация): ${relevant} обогащённых. Теги: упаковка, сырьё, рост цен; условно +53 ₽.`,
+      `GLM (имитация): ${values[5]} инсайтов. Пример: проверьте условия закупочных контрактов; условно +26 ₽.`
+    ];
+    let spent = exhausted ? 500 : 0;
+    for (let index = 0; index < keys.length; index++) {
+      const card = $(`[data-stage="${keys[index]}"]`);
+      if (exhausted && index >= 3) {
+        card.classList.add('deferred');
+        card.querySelector('.stage-state').textContent = 'Пропущено: лимит';
+        log(`${keys[index].toUpperCase()}: не выполнялся — условный бюджет исчерпан.`);
+        continue;
+      }
       card.classList.add('active');
-      card.querySelector('.stage-state').textContent = 'В работе…';
-      await wait(650);
-      $(`#${stage.count}`).textContent = stage.value;
-      budget += stage.cost;
-      setBudget(budget);
+      card.querySelector('.stage-state').textContent = 'Имитация…';
+      await new Promise(resolve => setTimeout(resolve, 400));
+      if (token !== generation) return; // Reset/replay invalidates every older continuation.
+      if (index === 1) {
+        raw = sources.flatMap(source => Array.from({ length: 7 }, (_, i) => ({ source, id: `${source}-${i}`, title: 'Синтетическая новость' })));
+        $('#raw-count').textContent = raw.length;
+      }
+      $(`#count-${counters[index]}`).textContent = values[index];
+      spent += costs[index];
+      budget(spent);
       card.classList.remove('active');
       card.classList.add('complete');
-      card.querySelector('.stage-state').textContent = stage.label;
+      card.querySelector('.stage-state').textContent = 'Имитация завершена';
+      log(messages[index]);
     }
-    $('#trace-result').textContent = 'Инсайт сформирован';
-    $('#trace-result').classList.add('ready');
-    status.textContent = 'Прогон завершён · 97 ₽';
-    status.className = 'run-status done';
-    runButton.textContent = '↻ Запустить заново';
-    runButton.disabled = false;
+    $('#deferred-count').textContent = exhausted ? unique : 0;
+    $('#trace-result').textContent = exhausted ? 'Отложено: лимит LLM' : 'Синтетический инсайт готов';
+    $('#trace-result').classList.toggle('ready', !exhausted);
+    $('#run-status').textContent = exhausted
+      ? `Raw сохранён · отложено ${unique} · новых расходов 0 ₽ (условно)`
+      : 'Прогон завершён · условно 97 ₽ (не реальные расходы)';
+    $('#run-status').className = 'run-status done';
+    $('#run-button').textContent = '↻ Запустить заново';
+    $('#run-button').disabled = false;
+    settings.forEach(input => { input.disabled = false; });
     running = false;
   }
-
-  runButton.addEventListener('click', run);
+  $('#run-button').addEventListener('click', run);
+  $('#reset-button').addEventListener('click', reset);
+  settings.forEach(input => input.addEventListener('change', reset));
   $('#trace-toggle').addEventListener('click', () => {
     const details = $('#trace-details');
-    const opened = !details.hidden;
-    details.hidden = opened;
-    $('#trace-toggle').textContent = opened ? 'Показать детали' : 'Скрыть детали';
-    $('#trace-toggle').setAttribute('aria-expanded', String(!opened));
+    details.hidden = !details.hidden;
+    $('#trace-toggle').textContent = details.hidden ? 'Показать детали' : 'Скрыть детали';
+    $('#trace-toggle').setAttribute('aria-expanded', String(!details.hidden));
   });
+  reset();
 })();
