@@ -229,6 +229,12 @@ def insights_prototype(request: Request):
     return templates.TemplateResponse(request, "insights/prototype.html")
 
 
+@router.get("/insights/parser")
+def insights_parser(request: Request):
+    """Интерактивная, полностью локальная демонстрация news-parser pipeline."""
+    return templates.TemplateResponse(request, "insights/parser.html")
+
+
 @router.get("/insights/tpl/{name}")
 def insights_tpl(name: str):
     # Отдаём HTML-фрагмент без обработки Jinja2 (только токены JS-загрузчика).

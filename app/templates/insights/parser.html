@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Инсайты · Демонстрация парсера</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/insights.css">
+  <link rel="stylesheet" href="/static/parser.css">
+</head>
+<body class="parser-body">
+  <main class="parser-page">
+    <header class="parser-header">
+      <div><a class="parser-back" href="/insights/prototype">← К прототипу</a><h1>Как новость становится инсайтом</h1><p>Интерактивная демонстрация воркера news-parser · все события и затраты синтетические</p></div>
+      <div class="run-controls"><span id="run-status" class="run-status idle">Готов к запуску</span><button id="run-button" class="btn btn-primary">▶ Запустить прогон</button></div>
+    </header>
+
+    <section class="budget-card" aria-label="Дневной бюджет LLM">
+      <div><span class="eyebrow">Бюджетный клапан · общий ключ</span><strong><span id="budget-used">0</span> ₽ <small>из 500 ₽ / день</small></strong></div>
+      <div class="budget-track"><i id="budget-bar"></i></div>
+      <p id="budget-note">Сбор и дедупликация не используют LLM. Лимит защищает расходы, а сбор продолжится даже после его достижения.</p>
+    </section>
+
+    <section class="pipeline" aria-label="Пайплайн обработки новостей">
+      <article class="stage" data-stage="sources"><div class="stage-number">1</div><div class="stage-icon">◌</div><div><h2>Источники</h2><p>RSS и HTML · по расписанию</p></div><div class="stage-count"><b id="count-sources">6</b><span>источников</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage" data-stage="collect"><div class="stage-number">2</div><div class="stage-icon">↓</div><div><h2>Сбор</h2><p>Нормализация в news_raw</p></div><div class="stage-count"><b id="count-collected">0</b><span>новостей</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage" data-stage="dedupe"><div class="stage-number">3</div><div class="stage-icon">≠</div><div><h2>Дедупликация</h2><p>SHA-256 + fuzzy ≥ 90</p></div><div class="stage-count"><b id="count-unique">0</b><span>уникальных</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage llm" data-stage="gemma"><div class="stage-number">4</div><div class="stage-icon">G</div><div><h2>Gemma</h2><p>Relevance · дешёвый фильтр</p></div><div class="stage-count"><b id="count-relevant">0</b><span>релевантных</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage llm" data-stage="qwen"><div class="stage-number">5</div><div class="stage-icon">Q</div><div><h2>Qwen</h2><p>Сущности, теги, summary</p></div><div class="stage-count"><b id="count-enriched">0</b><span>обогащено</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage llm" data-stage="glm"><div class="stage-number">6</div><div class="stage-icon">AI</div><div><h2>GLM</h2><p>Инсайт для профиля клиента</p></div><div class="stage-count"><b id="count-insights">0</b><span>инсайтов</span></div><div class="stage-state">Ожидание</div></article>
+    </section>
+
+    <section class="demo-grid">
+      <article class="trace-card">
+        <div class="section-title"><div><span class="eyebrow">Трассировка</span><h2>Одна новость — весь путь</h2></div><button id="trace-toggle" class="trace-toggle" aria-expanded="false">Показать детали</button></div>
+        <div class="news-preview"><span class="source-dot"></span><div><b>Ведомости · 10:15</b><h3>Производители упаковки сообщают о росте цен на сырьё</h3><p>Синтетический заголовок для демонстрации: связана с категорией «производство» в профиле клиента.</p></div><span id="trace-result" class="trace-result">Ожидает прогон</span></div>
+        <div id="trace-details" class="trace-details" hidden>
+          <ol>
+            <li><b>Источник → сбор:</b> RSS-адаптер нормализовал title, text, url, published_at; запись создана в <code>news_raw</code>.</li>
+            <li><b>Дедупликация:</b> SHA-256 нового заголовка; похожих материалов за последние 24 часа не найдено.</li>
+            <li><b>Gemma:</b> relevance score <strong>0,91</strong> — материал проходит в каскад по профилю «производство, логистика».</li>
+            <li><b>Qwen:</b> извлечены: «упаковка», «сырьё», «рост цен»; создано краткое резюме и запись <code>news_enriched</code>.</li>
+            <li><b>GLM:</b> сформирован инсайт: «Проверьте условия закупочных контрактов на следующий квартал».</li>
+          </ol>
+          <p class="trace-foot">Связь источника и вывода хранится в <code>news_source_rel</code>; ответ можно проверить до первичного фрагмента.</p>
+        </div>
+      </article>
+
+      <aside class="explain-card"><span class="eyebrow">Правила воркера</span><h2>Что важно на обсуждении</h2><ul><li>Отдельный процесс и планировщик; FastAPI только читает общую БД.</li><li>Эвристика лишь приоритизирует кандидатов — сырые новости не теряются.</li><li>При исчерпании 500 ₽ LLM-очередь переносится на следующий день.</li><li>Здесь нет сетевых запросов и вызовов моделей: это безопасная имитация.</li></ul><a href="/insights/prototype" class="text-link">Открыть UI инсайтов →</a></aside>
+    </section>
+  </main>
+  <script src="/static/parser.js"></script>
+</body>
+</html>
