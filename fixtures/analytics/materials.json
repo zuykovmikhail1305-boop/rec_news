@@ -62,8 +62,7 @@
   "Inflation_tracker_02": {
     "analytics_id": "a_inflation_tracker",
     "title": "Инфляция 25–31 августа: основные выводы",
-    "published_at": "2026-09-03T19:00:00+03:00",
-    "date_note": "дата уточняется по первой странице",
+    "published_at": "2026-09-02T19:00:00+03:00",
     "type": "комментарий",
     "author": "Центр макроэкономического анализа Альфа-Банка",
     "url": "https://alfabank.example/analytics/Inflation_tracker_02.pdf"

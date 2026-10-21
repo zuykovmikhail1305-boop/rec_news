@@ -165,6 +165,7 @@ _JUDGE_PROMPT = """Ты аналитик банка. Руководителю п
 - is_outdated: true, если выводы фрагмента уже неактуальны с учётом новости;
 - reason: одно предложение, почему.
 
+Будь строгим: если фрагмент про другую отрасль или тему и даёт лишь общий экономический фон, не объясняя причины или последствия именно этого события, — score 1.
 Не придумывай факты, которых нет в тексте. Ответ — только JSON:
 {"items": [{"id": 1, "score": 0, "relation": "...", "is_outdated": false, "reason": "..."}]}
 /no_think"""
@@ -217,7 +218,8 @@ def _judge_validator(count: int) -> Callable[[dict[str, Any]], dict[str, Any]]:
 _BRIDGE_PROMPT = """Ты аналитик Альфа-Банка. Напиши 2–3 предложения для руководителя под новостью:
 1. что говорит аналитика банка об этом событии;
 2. что это значит с учётом роли и компании руководителя;
-3. если аналитика противоречит новости — скажи прямо: «Аналитика от {date} ожидала обратного…».
+3. только если во входных данных указано «противоречит новости: да» — скажи прямо: «Аналитика \
+от {date} ожидала обратного…»; иначе не пиши о расхождении.
 Только факты из новости и фрагмента: без новых чисел и дат. Ответ — JSON с полем summary.
 /no_think"""
 
@@ -362,6 +364,8 @@ class AnalyticsMatcher:
                 continue
             candidate.score = candidate.cand * candidate.fresh
             kept.append(candidate)
+        if _CONFIG.get("require_topic_overlap", False) and event.topics:
+            kept = [c for c in kept if set(c.chunk.topics) & set(event.topics)]
         kept.sort(key=lambda c: -c.score)
         kept = kept[: _CONFIG["rerank_input"]]
 
@@ -406,6 +410,8 @@ class AnalyticsMatcher:
         attached: list[tuple[EventAnalytics, float]] = []
         if not self._chunks:
             status = "no_corpus"
+        elif not top:
+            status = "empty"  # подходящих кандидатов нет — LLM-судья не нужен
         elif verdicts is None:
             status = "fallback"
             if top and top[0].rerank >= _CONFIG["fallback_min_rerank"]:
@@ -505,7 +511,8 @@ class AnalyticsMatcher:
         aspects = "; ".join(a.title for a in profile.aspects[:5])
         content = (f"Роль: {profile.role}\nИнтересы: {aspects}\n\nНовость:\n{title}\n{lead}\n\n"
                    f"Фрагмент аналитики ({date}, «{chunk.analytics_title}», раздел «{chunk.section_title}», "
-                   f"связь: {item.relation}):\n{chunk.text[:1500]}")
+                   f"связь: {item.relation}, противоречит новости: {'да' if item.contradicts else 'нет'}):\n"
+                   f"{chunk.text[:1500]}")
         try:
             data = (self.llm or default_llm()).json(
                 "analytics_bridge",

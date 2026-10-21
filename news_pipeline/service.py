@@ -260,7 +260,13 @@ class MLService:
         if row is None:
             return item
         update: dict[str, Any] = {}
+        event_id = item.event_id or f"e_{item.news_id}"
         try:
+            if self.analytics.get(event_id) is None:
+                # Воркер ещё не дошёл до события — подбираем сразу, чтобы блок не пустовал.
+                event = self.event_input(event_id)
+                if event is not None:
+                    self.analytics.match_event(event)
             update["analytics"] = self.analytics.for_user(
                 profile, item.event_id or f"e_{item.news_id}", news_title=row.title, news_lead=row.lead
             )
