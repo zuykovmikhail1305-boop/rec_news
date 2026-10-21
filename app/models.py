@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -72,7 +72,7 @@ class UserProfile(Base):
     activity_description: Mapped[str] = mapped_column(Text, default="")
     fso_execution: Mapped[str | None] = mapped_column(String(120), nullable=True)
     previous_sector: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    holding_center_employee: Mapped[bool] = mapped_column(default=False)
+    holding_center_employee: Mapped[bool] = mapped_column(Boolean, default=False)
     service_models: Mapped[str] = mapped_column(Text, default="")
 
     user: Mapped[User] = relationship(back_populates="profile")

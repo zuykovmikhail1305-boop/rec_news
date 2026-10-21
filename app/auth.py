@@ -1,24 +1,22 @@
 import os
-import secrets
 from datetime import datetime, timedelta, timezone
 
+from fastapi import Depends, Request
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, Request, status
-from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 import models
 from database import get_db
-from security import pwd_context
 
-SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex(32))
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-me-in-production")
 ALGORITHM = "HS256"
 
 REMINDER_MAX_AGE = timedelta(days=14)
 
 
 def create_access_token(user_id: int) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(hours=24)
+    """Токен живёт столько же, сколько remember-me cookie (REMINDER_MAX_AGE — 14 дней)."""
+    expire = datetime.now(timezone.utc) + REMINDER_MAX_AGE
     return jwt.encode({"sub": str(user_id), "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -41,17 +39,8 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
     return None
 
 
-def login_required(user: models.User | None):
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_303_SEE_OTHER,
-            headers={"Location": "/login"},
-        )
-    return user
-
-
 def remember_user_cookie(response, db: Session, user: models.User):
-    """Памятка: ставим долгий cookie, чтобы не логиниться каждый раз."""
+    """Памятка: ставим долгий cookie, чтобы не логиниться каждый раз (JWT живёт столько же)."""
     token = create_access_token(user.id)
     db_exp = datetime.now(timezone.utc) + REMINDER_MAX_AGE
     response.set_cookie(
@@ -61,15 +50,9 @@ def remember_user_cookie(response, db: Session, user: models.User):
         expires=db_exp,
         httponly=True,
         samesite="lax",
+        secure=(os.getenv("ENV", "dev").lower() == "prod"),
     )
 
 
 def logout_cookie(response):
     response.delete_cookie("access_token")
-
-
-def login_redirect_response(url: str = "/"):
-    return RedirectResponse(url, status_code=status.HTTP_303_SEE_OTHER)
-
-
-from security import verify_password  # noqa: E402

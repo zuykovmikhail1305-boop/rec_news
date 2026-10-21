@@ -4,6 +4,7 @@
   <span class="badge">Шаг 2 из 2</span>
   <h1>Анкета компании</h1>
   <p class="sub">Памятка регистрации компактных компаний</p>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
   <form method="post" action="/profile/setup">
     <fieldset>
       <legend>1. Характеристика деятельности</legend>
@@ -11,7 +12,7 @@
       <div class="checks">
         {% for c in categories %}
         <label><input type="checkbox" name="categories" value="{{ c }}"
-          {% if c in (profile.categories or '')|split(',') %}checked{% endif %}> {{ c }}</label>
+          {% if c in selected_categories %}checked{% endif %}> {{ c }}</label>
         {% endfor %}
       </div>
       <label for="activity_description">Характер деятельности</label>
@@ -54,7 +55,7 @@
       <div class="checks">
         {% for o in service_options %}
         <label><input type="checkbox" name="service_models" value="{{ o }}"
-          {% if o in (profile.service_models or '')|split(',') %}checked{% endif %}> {{ o }}</label>
+          {% if o in selected_service_models %}checked{% endif %}> {{ o }}</label>
         {% endfor %}
       </div>
     </fieldset>
