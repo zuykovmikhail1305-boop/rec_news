@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from news_pipeline.references import canonical_role
 
 # --- Входные потоки от бэкенда (§2) -----------------------------------------
 
@@ -25,6 +27,12 @@ class UserProfileIn(BaseModel):
     competitors: list[str] = Field(default_factory=list)
     counterparties: list[str] = Field(default_factory=list)
     company_size: str | None = None
+
+    @field_validator("role")
+    @classmethod
+    def _canonical_role(cls, role: str) -> str:
+        """Роль приводится к названию из ``role_topics.json`` (регистр, дефисы, синонимы)."""
+        return canonical_role(role)
 
 
 class NewsIn(BaseModel):

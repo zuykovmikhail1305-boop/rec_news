@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -26,6 +25,7 @@ from news_pipeline.analytics import AnalyticsMatcher, EventInput
 from news_pipeline.analytics.corpus import load_fixture_materials
 from news_pipeline.config import COMPANIES_CSV, DATA_DIR, NEWS_DB, PAYMENTS_CSV, SUMMARY_DB, UNIQUE_DB
 from news_pipeline.dedup.drop_dublicate import NewsDeduplicator
+from news_pipeline.env import env_flag
 from news_pipeline.insights.insight import AnalyticsContext, generate_insight
 from news_pipeline.llm.client import default_llm
 from news_pipeline.preprocessing.news_summarizer import NewsSummarizer
@@ -50,16 +50,11 @@ log = logging.getLogger("rec_news")
 FEEDBACK_DB = DATA_DIR / "feedback.db"
 
 
-def _env_flag(name: str, default: bool = True) -> bool:
-    value = os.environ.get(name)
-    return default if value is None else value.strip().lower() not in ("0", "false", "no", "off")
-
-
 class MLService:
     """Все компоненты ML-части в одном объекте."""
 
     def __init__(self, *, use_llm: bool | None = None, worker_interval: float = 10.0) -> None:
-        self.use_llm = _env_flag("REC_NEWS_USE_LLM") if use_llm is None else use_llm
+        self.use_llm = env_flag("REC_NEWS_USE_LLM") if use_llm is None else use_llm
         self.llm = default_llm()
         self.llm.enabled = self.use_llm
         self.profiles = ProfileStore()

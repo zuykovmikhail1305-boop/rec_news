@@ -1,9 +1,9 @@
 """Анализ новости через LLM: краткая выжимка и шаблон целевой аудитории.
 
 Для разработки используется локальная модель в LM Studio
-(OpenAI-совместимый API, ``http://127.0.0.1:1234/v1``). Чтобы перейти
-на модели хакатона, достаточно передать другие ``base_url``, ``api_key``
-и ``model`` — формат запросов тот же.
+(OpenAI-совместимый API). Адрес, модель и ключ задаются переменными
+``REC_NEWS_LLM_*`` в ``.env``; чтобы перейти на модели хакатона, достаточно
+поменять их — формат запросов тот же.
 
 Новость анализируется один раз: результат (``summary`` для векторизации
 и дедупликации, ``audience`` для подбора пользователей) нужно сохранить
@@ -19,6 +19,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
+from news_pipeline.config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, LLM_TIMEOUT_S
 from news_pipeline.recommendation.audience_profile import (
     INDUSTRIES,
     AudienceProfile,
@@ -27,7 +28,7 @@ from news_pipeline.recommendation.audience_profile import (
     vocabulary_prompt,
 )
 
-DEFAULT_BASE_URL = "http://127.0.0.1:1234/v1"
+DEFAULT_BASE_URL = LLM_BASE_URL
 
 SYSTEM_PROMPT = """Ты аналитик Альфа-Банка. Ты читаешь новость и готовишь данные \
 для сервиса, который подбирает новости руководителям крупного бизнеса.
@@ -231,7 +232,7 @@ class NewsAnalyzer:
         работает в 3–4 раза дольше (~15–25 с на новость против ~5 с). Для
         Qwen3 выключается командой ``/no_think`` в системном промпте.
         """
-        self.client = client or ChatClient()
+        self.client = client or ChatClient(api_key=LLM_API_KEY, model=LLM_MODEL, timeout=LLM_TIMEOUT_S)
         self.max_input_chars = max_input_chars
         self.max_retries = max_retries
         self.max_tokens = max_tokens or (3500 if thinking else 1200)

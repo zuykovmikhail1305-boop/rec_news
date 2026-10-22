@@ -13,7 +13,7 @@
 * **проверку ответа**: JSON выделяется из текста, валидатор задачи может
   отклонить ответ — тогда запрос повторяется с текстом ошибки.
 
-Параметры подключения — раздел ``[models]`` в ``config/ml.toml``.
+Параметры подключения — переменные ``REC_NEWS_LLM_*`` в ``.env`` (см. :mod:`config`).
 """
 
 from __future__ import annotations
@@ -27,7 +27,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from news_pipeline.config import DATA_DIR
+from news_pipeline.config import (
+    DATA_DIR,
+    LLM_API_KEY,
+    LLM_BASE_URL,
+    LLM_MODEL,
+    LLM_TEMPERATURE,
+    LLM_TIMEOUT_S,
+)
 from news_pipeline.llm.news_analyzer import ChatClient, LLMError, _extract_json
 from news_pipeline.settings import SETTINGS
 
@@ -56,12 +63,11 @@ class LLM:
         enabled: bool = True,
     ) -> None:
         """``enabled=False`` — принудительно работать без LLM (для замеров и демо)."""
-        config = SETTINGS.models
-        self.base_url = base_url or config["llm_base_url"]
-        self.model_name = model or config.get("llm_model") or None
-        self.api_key = api_key
-        self.timeout = float(config.get("llm_timeout_s", 180))
-        self.temperature = float(config.get("temperature", 0.0))
+        self.base_url = base_url or LLM_BASE_URL
+        self.model_name = model or LLM_MODEL
+        self.api_key = api_key or LLM_API_KEY
+        self.timeout = LLM_TIMEOUT_S
+        self.temperature = LLM_TEMPERATURE
         self.enabled = enabled
         self.cache_path = Path(cache_path)
         self.log_path = Path(log_path)

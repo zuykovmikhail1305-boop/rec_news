@@ -2,6 +2,8 @@
 
     python scripts/run_api.py
     python scripts/run_api.py --port 8080 --no-llm
+
+Хост и порт по умолчанию — ``REC_NEWS_API_HOST`` и ``REC_NEWS_API_PORT`` из ``.env``.
 """
 
 import argparse
@@ -12,10 +14,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from news_pipeline.env import env_int, env_str  # noqa: E402
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--host", default=env_str("REC_NEWS_API_HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=env_int("REC_NEWS_API_PORT", 8000))
     parser.add_argument("--no-llm", action="store_true", help="работать без LLM")
     parser.add_argument("--data-dir", type=Path, help="каталог баз вместо data/")
     args = parser.parse_args()

@@ -1,7 +1,8 @@
 """Индекс новостей в Qdrant по dense-эмбеддингам.
 
 Каждый документ хранится в коллекции с одним вектором ``dense`` —
-эмбеддингом ``deepvk/USER-bge-m3``, нормированным по L2. Похожесть двух
+эмбеддингом модели ``REC_NEWS_EMBEDDING_MODEL`` (по умолчанию
+``deepvk/USER-bge-m3``), нормированным по L2. Похожесть двух
 документов — косинус их векторов (:meth:`QdrantIndex.similarity`), поиск
 похожих в коллекции — :meth:`QdrantIndex.find_similar`.
 
@@ -22,9 +23,9 @@ import numpy as np
 from qdrant_client import QdrantClient, models
 from sentence_transformers import SentenceTransformer
 
-from news_pipeline.config import MODELS_DIR, QDRANT_PATH
+from news_pipeline.config import EMBEDDING_MODEL, MODELS_DIR, QDRANT_PATH
 
-EMBEDDING_MODEL_NAME = "deepvk/USER-bge-m3"
+EMBEDDING_MODEL_NAME = EMBEDDING_MODEL
 VECTOR_NAME = "dense"
 
 

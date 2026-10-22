@@ -4,7 +4,8 @@
     SETTINGS.ranking["weights"]["sem"]
 
 Файл читается один раз при импорте. Для экспериментов можно загрузить
-другой файл через :func:`load_settings`.
+другой файл через :func:`load_settings`. Подключение к моделям (адрес LLM,
+модель, ключ) — не здесь, а в переменных окружения: см. :mod:`config`.
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ class Settings:
     """Разделы ``ml.toml`` как словари."""
 
     pipeline_version: str
-    models: dict[str, Any]
     prompts: dict[str, str]
     profile: dict[str, Any]
     news: dict[str, Any]
@@ -39,7 +39,6 @@ def load_settings(path: str | Path = CONFIG_PATH) -> Settings:
         data = tomllib.load(file)
     return Settings(
         pipeline_version=data["pipeline_version"],
-        models=data["models"],
         prompts=data["prompts"],
         profile=data["profile"],
         news=data["news"],

@@ -1,7 +1,7 @@
 """Справочники ML-команды (ТЗ §2) из ``config/references/``.
 
 * таксономия тем — :data:`TOPICS`, :func:`topics_for_industry`;
-* матрица «роль × тема» — :func:`role_topic_weight`;
+* матрица «роль × тема» — :data:`ROLES`, :func:`canonical_role`, :func:`role_topic_weight`;
 * словарь сущностей и алиасов — :data:`ENTITIES`, :func:`find_entities`;
 * рейтинг источников — :func:`source_rating`.
 """
@@ -80,6 +80,16 @@ _ROLE_TOPICS = _load("role_topics.json")
 ROLE_TOPICS_VERSION: str = _ROLE_TOPICS["version"]
 ROLES: tuple[str, ...] = tuple(_ROLE_TOPICS["roles"])
 
+
+def _role_key(role: str) -> str:
+    """Ключ роли для сравнения: регистр, ё/е, дефисы и пробелы не различаются."""
+    return " ".join(role.casefold().replace("ё", "е").replace("-", " ").split())
+
+
+_ROLE_BY_KEY = {_role_key(role): role for role in ROLES} | {
+    _role_key(alias): role for alias, role in _ROLE_TOPICS.get("aliases", {}).items()
+}
+
 _ENTITIES = _load("entities.json")
 ENTITIES_VERSION: str = _ENTITIES["version"]
 ENTITIES: tuple[Entity, ...] = tuple(
@@ -105,9 +115,18 @@ def topics_for_industry(industry: str) -> list[Topic]:
     return [topic for topic in TOPICS if industry in topic.industries]
 
 
+def canonical_role(role: str) -> str:
+    """Название роли из справочника для любого её написания; неизвестная роль — как есть, без лишних пробелов.
+
+    «Финансовый Директор», «другой C-level руководитель» и «иной сотрудник»
+    дают роли справочника.
+    """
+    return _ROLE_BY_KEY.get(_role_key(role), " ".join(role.split()))
+
+
 def role_topic_weight(role: str | None, topic_id: str) -> float:
     """Априорная важность темы для роли (для неизвестной роли — значение по умолчанию)."""
-    weights = _ROLE_TOPICS["roles"].get(role or "", {})
+    weights = _ROLE_TOPICS["roles"].get(canonical_role(role or ""), {})
     return float(weights.get(topic_id, _ROLE_TOPICS["default"]))
 
 

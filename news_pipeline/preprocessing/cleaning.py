@@ -1,8 +1,11 @@
 """Очистка текста новости (ТЗ §5.1).
 
-* :func:`clean_text` — убирает HTML, ссылки, эмодзи, шаблонные хвосты
-  источников и лишние пробелы; абзацы (пустая строка) сохраняются;
+* :func:`clean_text` — убирает ссылки, эмодзи, шаблонные хвосты источников
+  и лишние пробелы; абзацы (пустая строка) сохраняются;
 * :func:`lead` — заголовок + первые предложения для эмбеддингов.
+
+Новости и аналитика приходят из базы уже простым текстом, поэтому HTML
+здесь не разбирается.
 
 Унификация кавычек, тире и ё→е для хешей и сравнения — в
 :func:`news_pipeline.dedup.fingerprints.normalize`; читаемый текст ими
@@ -11,15 +14,12 @@
 
 from __future__ import annotations
 
-import html
 import re
 
 from razdel import sentenize
 
 from news_pipeline.settings import SETTINGS
 
-_TAG_RE = re.compile(r"<[^>]+>")
-_BLOCK_TAG_RE = re.compile(r"</?(p|div|br|li|h[1-6])[^>]*>", re.IGNORECASE)
 _URL_RE = re.compile(r"(https?://|www\.)\S+", re.IGNORECASE)
 _EMOJI_RE = re.compile(
     "[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0000FE0F\U0000200D\U00002B00-\U00002BFF]"
@@ -44,8 +44,6 @@ _SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([.,;:!?»)])")
 
 def clean_text(text: str) -> str:
     """Чистит текст новости, сохраняя деление на абзацы."""
-    text = _BLOCK_TAG_RE.sub("\n\n", text)
-    text = html.unescape(_TAG_RE.sub(" ", text))
     text = _URL_RE.sub(" ", text)
     text = _EMOJI_RE.sub(" ", text)
     paragraphs = []
