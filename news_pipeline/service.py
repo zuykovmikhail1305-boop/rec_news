@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
+from news_pipeline.agent import BusinessInsightAgent
 from news_pipeline.analytics import AnalyticsMatcher, EventInput
 from news_pipeline.analytics.corpus import load_fixture_materials
 from news_pipeline.config import COMPANIES_CSV, DATA_DIR, NEWS_DB, PAYMENTS_CSV, SUMMARY_DB, UNIQUE_DB
@@ -88,6 +89,7 @@ class MLService:
                 "CREATE TABLE IF NOT EXISTS feedback (user_id TEXT, news_id TEXT, type TEXT, value REAL,"
                 " position INTEGER, pipeline_version TEXT, timestamp TEXT)"
             )
+        self.agent = BusinessInsightAgent(self)
 
     # --- фоновый конвейер новостей -------------------------------------------
 
@@ -237,13 +239,16 @@ class MLService:
         result = self.feed.build(profile, limit=request.limit, window_days=request.window_days, now=now, version=version)
         with_insights = request.with_insights and result.llm_available
         items = list(self._executor.map(lambda item: self._enrich_item(profile, item, with_insights), result.items))
-        return FeedResponse(
+        response = FeedResponse(
             user_id=profile.user_id,
             generated_at=datetime.now(timezone.utc),
             pipeline_version=SETTINGS.pipeline_version,
             llm_available=result.llm_available,
             items=items,
         )
+        if now is None:
+            self.agent.store.put_feed(response)  # контекст агента — то, что пользователь видит в ленте
+        return response
 
     def _news_row(self, news_id: str):
         rows = read_summaries(UNIQUE_DB, [news_id])
@@ -299,6 +304,7 @@ class MLService:
             "pipeline_version": SETTINGS.pipeline_version,
             "llm_enabled": self.use_llm,
             "llm_available": self.llm.is_available(),
+            "llm_models": {task: self.llm.model_for(task) for task in SETTINGS.llm_tasks if task != "default"},
             "analytics_materials": self.analytics.store.material_count(),
             "analytics_events": len(self.analytics.store.matched_events()),
             "news_pending": len(summary_ids(SUMMARY_DB)),

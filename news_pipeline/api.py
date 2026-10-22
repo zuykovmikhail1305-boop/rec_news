@@ -8,12 +8,17 @@
 
 from __future__ import annotations
 
+import json
+import queue
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from news_pipeline.agent import AgentAnswer, BriefRequest, ChatFeedback, ChatHistory, ChatRequest
 from news_pipeline.schemas import (
     AnalyticsIn,
     EventAnalyticsResult,
@@ -127,3 +132,74 @@ def post_feedback(event: FeedbackEvent) -> Accepted:
 @app.get("/health")
 def health() -> dict:
     return service().health()
+
+
+# --- агент бизнес-инсайтов (docs/agent_tz.md §7) -------------------------------
+
+
+def _agent_call(fn, *args, **kwargs) -> AgentAnswer:
+    try:
+        return fn(*args, **kwargs)
+    except KeyError as error:
+        raise HTTPException(404, f"профиль {error.args[0]} не найден — сначала POST /profiles")
+    except PermissionError as error:
+        raise HTTPException(403, str(error))
+
+
+@app.post("/chat", response_model=AgentAnswer)
+def post_chat(request: ChatRequest) -> AgentAnswer:
+    """Вопрос агенту: ответ по новостям и аналитике, подобранным для пользователя.
+    ``session_id`` — продолжить диалог (уточнения ссылаются на те же источники)."""
+    agent = service().agent
+    return _agent_call(agent.ask, request.user_id, request.question, session_id=request.session_id, now=request.now)
+
+
+@app.post("/chat/stream")
+def post_chat_stream(request: ChatRequest) -> StreamingResponse:
+    """То же, что ``/chat``, но потоком SSE: context → plan → sections → check → review → answer."""
+    agent = service().agent
+    events: queue.Queue = queue.Queue()
+
+    def run() -> None:
+        try:
+            agent.ask(request.user_id, request.question, session_id=request.session_id, now=request.now,
+                      on_event=lambda stage, data: events.put((stage, data)))
+        except KeyError as error:
+            events.put(("error", {"detail": f"профиль {error.args[0]} не найден"}))
+        except Exception as error:  # noqa: BLE001
+            events.put(("error", {"detail": str(error)}))
+        finally:
+            events.put(None)
+
+    threading.Thread(target=run, daemon=True).start()
+
+    def stream():
+        while (item := events.get()) is not None:
+            stage, data = item
+            yield f"event: {stage}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+@app.post("/insights/brief", response_model=AgentAnswer)
+def post_brief(request: BriefRequest) -> AgentAnswer:
+    """Главное за период для пользователя — без вопроса."""
+    return _agent_call(service().agent.brief, request.user_id, session_id=request.session_id, now=request.now)
+
+
+@app.get("/chat/{session_id}", response_model=ChatHistory)
+def get_chat(session_id: str) -> ChatHistory:
+    history = service().agent.store.history(session_id)
+    if history is None:
+        raise HTTPException(404, f"сессия {session_id} не найдена")
+    return history
+
+
+@app.post("/chat/{session_id}/feedback", status_code=202, response_model=Accepted)
+def post_chat_feedback(session_id: str, feedback: ChatFeedback) -> Accepted:
+    store = service().agent.store
+    history = store.history(session_id)
+    if history is None:
+        raise HTTPException(404, f"сессия {session_id} не найдена")
+    store.feedback(session_id, history.user_id, feedback)
+    return Accepted()

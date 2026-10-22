@@ -43,6 +43,19 @@ EMBEDDING_MODEL = env_str("REC_NEWS_EMBEDDING_MODEL", "deepvk/USER-bge-m3")
 LLM_BASE_URL = env_str("REC_NEWS_LLM_BASE_URL", "http://127.0.0.1:1234/v1")
 LLM_MODEL = env_str("REC_NEWS_LLM_MODEL")  # None — первая загруженная модель сервера
 LLM_API_KEY = env_str("REC_NEWS_LLM_API_KEY")
+
+# Разрешённые модели хакатона работают по одному ключу; каждая задача идёт
+# в свою модель. Здесь — имена моделей на сервере (как в GET /models) по
+# классам, а какая задача к какому классу относится — [llm_tasks] в ml.toml.
+# Не задано — используется REC_NEWS_LLM_MODEL (в LM Studio одна qwen3-8b на всё).
+LLM_MODELS: dict[str, str | None] = {
+    "light": env_str("REC_NEWS_LLM_MODEL_LIGHT"),          # Gemma 4 26B A4B
+    "reasoning": env_str("REC_NEWS_LLM_MODEL_REASONING"),  # GLM-5.3-Flash
+    "universal": env_str("REC_NEWS_LLM_MODEL_UNIVERSAL"),  # Qwen3.6 35B A3B
+    "relations": env_str("REC_NEWS_LLM_MODEL_RELATIONS"),  # DeepSeek-V4.1-Flash
+    "vision": env_str("REC_NEWS_LLM_MODEL_VISION"),        # Qwen3-VL-30B-A3B-Instruct
+    "text": env_str("REC_NEWS_LLM_MODEL_TEXT"),            # Kimi-K2.6
+}
 LLM_TIMEOUT_S = env_float("REC_NEWS_LLM_TIMEOUT_S", 180.0)
 LLM_TEMPERATURE = env_float("REC_NEWS_LLM_TEMPERATURE", 0.0)
 

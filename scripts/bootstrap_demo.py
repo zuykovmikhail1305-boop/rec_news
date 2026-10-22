@@ -33,12 +33,12 @@ if __name__ == "__main__":
     from news_pipeline.service import MLService
     from news_pipeline.storage.news_db import read_ids, summary_ids
     from news_pipeline.test_data.profiles import PROFILES_PATH, build_test_profiles, load_profiles, save_profiles
-    from news_pipeline.test_data.synthetic_news import OUTPUT_PATH, PERIOD_END, load_into_news_db
+    from news_pipeline.test_data.synthetic_news import PERIOD_END, default_corpus, load_into_news_db
 
     svc = MLService()
     try:
         if not (summary_ids(UNIQUE_DB) or summary_ids(SUMMARY_DB) or read_ids(NEWS_DB)):
-            print(f"новости: загружено {load_into_news_db(NEWS_DB, OUTPUT_PATH)} из {OUTPUT_PATH}")
+            print(f"новости: загружено {load_into_news_db(NEWS_DB, default_corpus())} из {default_corpus()}")
         started = time.monotonic()
         print("конвейер:", svc.run_pipeline_once(), f"({time.monotonic() - started:.0f} с)")
 

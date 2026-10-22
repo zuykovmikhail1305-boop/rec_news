@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from news_pipeline.config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, LLM_TIMEOUT_S
+from news_pipeline.config import LLM_API_KEY, LLM_BASE_URL, LLM_TIMEOUT_S
 from news_pipeline.recommendation.audience_profile import (
     INDUSTRIES,
     AudienceProfile,
@@ -27,6 +28,7 @@ from news_pipeline.recommendation.audience_profile import (
     regions_in_text,
     vocabulary_prompt,
 )
+from news_pipeline.settings import llm_model_for
 
 DEFAULT_BASE_URL = LLM_BASE_URL
 
@@ -140,7 +142,13 @@ class ChatClient:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self._local = threading.local()
         self.model = model or self._first_chat_model()
+
+    @property
+    def last_usage(self) -> dict[str, Any] | None:
+        """Токены последнего ответа в этом потоке (поле ``usage`` API), если сервер их вернул."""
+        return getattr(self._local, "usage", None)
 
     def complete(
         self,
@@ -149,31 +157,41 @@ class ChatClient:
         schema: dict[str, Any] | None = None,
         temperature: float = 0.0,
         max_tokens: int = 1200,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> str:
         """Отправляет диалог и возвращает текст ответа модели.
 
         Если передана ``schema``, ответ ограничивается JSON-схемой
-        (structured output). Сервер без поддержки схем получает запрос
-        без неё — тогда JSON выделяется из текста при разборе.
+        (structured output). ``model`` — другая модель того же сервера
+        вместо модели клиента. ``reasoning_effort`` (``none``, ``low``…) —
+        сколько модели рассуждать перед ответом: ``none`` в разы дешевле и
+        быстрее. Сервер, который не знает схем или ``reasoning_effort``,
+        получает запрос без них — тогда JSON выделяется из текста при разборе.
         """
         body: dict[str, Any] = {
-            "model": self.model,
+            "model": model or self.model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if reasoning_effort:
+            body["reasoning_effort"] = reasoning_effort
         if schema is not None:
             body["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {"name": "news_analysis", "strict": True, "schema": schema},
             }
-        try:
-            response = self._request("POST", "/chat/completions", body)
-        except LLMError:
-            if schema is None:
-                raise
-            body.pop("response_format")
-            response = self._request("POST", "/chat/completions", body)
+        optional = [key for key in ("reasoning_effort", "response_format") if key in body]
+        while True:
+            try:
+                response = self._request("POST", "/chat/completions", body)
+                break
+            except LLMError:
+                if not optional:
+                    raise
+                body.pop(optional.pop(0))
+        self._local.usage = response.get("usage") if isinstance(response, dict) else None
         try:
             return response["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError, TypeError) as error:
@@ -232,7 +250,9 @@ class NewsAnalyzer:
         работает в 3–4 раза дольше (~15–25 с на новость против ~5 с). Для
         Qwen3 выключается командой ``/no_think`` в системном промпте.
         """
-        self.client = client or ChatClient(api_key=LLM_API_KEY, model=LLM_MODEL, timeout=LLM_TIMEOUT_S)
+        self.client = client or ChatClient(
+            api_key=LLM_API_KEY, model=llm_model_for("news_analysis"), timeout=LLM_TIMEOUT_S
+        )
         self.max_input_chars = max_input_chars
         self.max_retries = max_retries
         self.max_tokens = max_tokens or (3500 if thinking else 1200)

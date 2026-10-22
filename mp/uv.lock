@@ -1802,6 +1802,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pypdf" },
     { name = "qdrant-client" },
+    { name = "razdel" },
     { name = "sentence-transformers" },
     { name = "uvicorn" },
 ]
@@ -1824,6 +1825,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=3.0.6" },
     { name = "pypdf", specifier = ">=6.21.1" },
     { name = "qdrant-client", specifier = ">=1.19.1" },
+    { name = "razdel", specifier = ">=0.5.0" },
     { name = "sentence-transformers", specifier = ">=6.1.0" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]
