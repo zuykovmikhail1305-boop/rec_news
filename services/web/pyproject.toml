@@ -1,7 +1,7 @@
 [project]
-name = "app"
+name = "rec-news-web"
 version = "0.1.0"
-description = "Add your description here"
+description = "Independent rec_news web service"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

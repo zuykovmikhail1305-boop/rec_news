@@ -22,20 +22,19 @@ Raw существует **только в памяти страницы** до 
 
 ## Запуск через FastAPI
 
-Из корня репозитория (Python 3.12, зависимости проекта):
+Из папки services/web (Python 3.12, зависимости проекта):
 
 ```sh
-cd app
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-DATABASE_URL=sqlite:////tmp/parser-demo-local.sqlite .venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+WEB_DATABASE_URL=sqlite:////tmp/parser-demo-local.sqlite .venv/bin/uvicorn web_app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Открыть `http://127.0.0.1:8000/insights/parser`. Если `.venv` уже подготовлена, достаточно последней команды. Установка зависимостей требует сети; само демо — нет. Сервер создаёт таблицы в отдельной SQLite-базе из команды, но демо в неё ничего не записывает. `Ctrl+C` останавливает сервер.
 
 ## Пересобрать автономный файл
 
-Источники: `app/templates/insights/parser.html`, `app/static/parser.js`, `app/static/parser.css`, общий `app/static/insights.css`.
+Источники: `web_app/templates/insights/parser.html`, `web_app/static/parser.js`, `web_app/static/parser.css`, общий `web_app/static/insights.css`.
 
 ```sh
 python3 scripts/build-parser-demo.py
@@ -48,7 +47,7 @@ python3 scripts/build-parser-demo.py
 Нужны уже установленные Node.js, Playwright и Chromium (скрипт сам ничего не скачивает):
 
 ```sh
-node --check app/static/parser.js
+node --check web_app/static/parser.js
 node tests/parser-demo.cjs
 # Если Playwright установлен вне проекта:
 PLAYWRIGHT_MODULE=/absolute/path/to/playwright node tests/parser-demo.cjs

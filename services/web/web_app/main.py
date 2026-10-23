@@ -3,9 +3,9 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from models import BusinessCategory, FsoExecution, PreviousSector, ServiceModel, User, UserProfile
-from database import engine, Base
-from routes import router
+from .models import BusinessCategory, FsoExecution, PreviousSector, ServiceModel, User, UserProfile
+from .database import engine, Base
+from .routes import router
 
 Base.metadata.create_all(bind=engine)
 

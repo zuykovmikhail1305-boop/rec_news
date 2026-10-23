@@ -5,8 +5,8 @@ from fastapi import Depends, Request
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
-import models
-from database import get_db
+from . import models
+from .database import get_db
 
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-me-in-production")
 ALGORITHM = "HS256"
