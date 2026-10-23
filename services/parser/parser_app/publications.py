@@ -1,5 +1,7 @@
 """Common URL -> HTML -> article pipeline. Does not import database code."""
 import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import urljoin
 
 import httpx
@@ -15,7 +17,7 @@ def fetch(client, url):
         try:
             response = client.get(url)
         except httpx.RequestError as exc:
-            raise CollectionError(f"Ошибка загрузки: {type(exc).__name__}") from exc
+            raise CollectionError(f"Ошибка загрузки: {type(exc).__name__}", retryable=True) from exc
         if response.status_code in {301, 302, 303, 307, 308}:
             try:
                 url = adapter.normalize(urljoin(url, response.headers.get("location", "")))
@@ -24,7 +26,19 @@ def fetch(client, url):
             time.sleep(5)
             continue
         if response.status_code != 200:
-            raise CollectionError(f"{adapter.name} вернул HTTP {response.status_code}")
+            retry_after = None
+            value = response.headers.get("retry-after")
+            if value:
+                try:
+                    retry_after = max(0, int(value))
+                except ValueError:
+                    try:
+                        retry_after = max(0, (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds())
+                    except (ValueError, TypeError, OverflowError):
+                        pass
+            raise CollectionError(f"{adapter.name} вернул HTTP {response.status_code}",
+                                  retryable=response.status_code == 429 or response.status_code >= 500,
+                                  status_code=response.status_code, retry_after=retry_after)
         if "text/html" not in response.headers.get("content-type", "").lower():
             raise CollectionError("Ожидался HTML-документ")
         return response.text, url

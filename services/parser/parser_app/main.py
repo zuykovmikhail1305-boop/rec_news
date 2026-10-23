@@ -4,8 +4,12 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import date, datetime
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
+from typing import Annotated, Literal
+from sqlalchemy import select
+from .models import NewsRaw
+from .queue import enqueue, job_result
 from sqlalchemy.orm import Session
 
 from .collector import CollectionError, collect, normalize_url, result
@@ -78,3 +82,33 @@ def collect_page(body: PublicationRequest, db: Session = Depends(get_db)):
     with upstream_client() as client:
         status, item = collect(db, client, url)
         return result(status, item)
+
+
+class QueueRequest(BaseModel):
+    urls: list[Annotated[str, Field(min_length=1, max_length=2048)]] = Field(min_length=1, max_length=100)
+
+
+@app.post("/queue", status_code=202, summary="Поставить публикации в очередь без загрузки")
+def enqueue_pages(body: QueueRequest, db: Session = Depends(get_db)):
+    try:
+        return {"items": [job_result(item) for item in enqueue(db, body.urls)]}
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.get("/queue", summary="Посмотреть очередь")
+def list_jobs(status: Literal["pending", "processing", "ready", "retry", "failed"] | None = None,
+              limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0),
+              db: Session = Depends(get_db)):
+    query = select(NewsRaw).order_by(NewsRaw.id)
+    if status:
+        query = query.where(NewsRaw.status == status)
+    return {"items": [job_result(item) for item in db.scalars(query.limit(limit).offset(offset))]}
+
+
+@app.get("/queue/{job_id}", summary="Статус и результат обработки публикации")
+def get_job(job_id: int, db: Session = Depends(get_db)):
+    item = db.get(NewsRaw, job_id)
+    if item is None:
+        raise HTTPException(404, "Задача не найдена")
+    return job_result(item)

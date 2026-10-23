@@ -14,14 +14,14 @@ def collect(db, client, url):
     url = normalize_url(url)
     existing = db.scalar(select(Publication).where(Publication.url == url))
     if existing:
-        return "skipped", existing
+        return ("skipped" if existing.status == "ready" else existing.status), existing
     article = parse_publication(client, url)
     html, url = article.pop("raw_html"), article.pop("url")
     article.pop("source")
     version = article.pop("parser_version")
     existing = db.scalar(select(Publication).where(Publication.url == url))
     if existing:
-        return "skipped", existing
+        return ("skipped" if existing.status == "ready" else existing.status), existing
     adapter = adapter_for(url)
     source = db.scalar(select(NewsSource).where(NewsSource.code == adapter.code))
     if source is None:
@@ -52,5 +52,5 @@ def result(status, item):
     return {"status": status, "id": item.id, "source": item.source.code, "url": item.url,
             "title": item.title, "text": item.text,
             "published_date": item.published_date.isoformat() if item.published_date else None,
-            "fetched_at": item.fetched_at.replace(tzinfo=timezone.utc).isoformat(), "content_hash": item.content_hash,
+            "fetched_at": item.fetched_at.replace(tzinfo=timezone.utc).isoformat() if item.fetched_at else None, "content_hash": item.content_hash,
             "parser_version": item.parser_version}

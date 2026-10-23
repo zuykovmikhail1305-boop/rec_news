@@ -86,3 +86,11 @@ class NewsQuote(Base):
     )
 
     publication: Mapped[NewsRaw] = relationship(back_populates="quotes")
+
+
+class QueueSourceState(Base):
+    """Shared request-start reservation for queue workers (no existing columns change)."""
+    __tablename__ = "queue_source_state"
+
+    source_id: Mapped[int] = mapped_column(ForeignKey("news_sources.id"), primary_key=True)
+    next_request_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
