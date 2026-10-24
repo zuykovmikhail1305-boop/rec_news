@@ -1,4 +1,4 @@
-"""Создать таблицы парсера или проверить существующую схему без изменений."""
+"""Create/verify parser tables in the configured shared database without resetting data."""
 import argparse
 import sys
 from pathlib import Path
@@ -8,37 +8,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="проверить существующую БД без записи")
+    parser.add_argument("--check", action="store_true", help="verify without schema writes")
     args = parser.parse_args()
-
-    from sqlalchemy import inspect
-    from parser_app import models  # register all tables
-    from parser_app.database import Base, engine
-
+    from parser_app.database import engine
+    from parser_app.schema import create_tables, schema_problems, target_schema
     try:
-        # SQLite connect would create a missing file even for a read-only check.
+        print("Database:", engine.url.render_as_string(hide_password=True), "schema:", target_schema(engine) or "default")
         if args.check and engine.dialect.name == "sqlite" and engine.url.database != ":memory:":
             if not engine.url.database or not Path(engine.url.database).exists():
                 print("Database does not exist; run init_db.py without --check.")
                 return 1
         if not args.check:
-            Base.metadata.create_all(engine)
-        inspector = inspect(engine)
-        problems = []
-        for table in Base.metadata.sorted_tables:
-            if not inspector.has_table(table.name):
-                problems.append(f"Missing table: {table.name}")
-                continue
-            existing = {column["name"] for column in inspector.get_columns(table.name)}
-            missing = set(table.columns.keys()) - existing
-            if missing:
-                problems.append(f"Missing columns in {table.name}: {', '.join(sorted(missing))}")
-            else:
-                print(f"OK: {table.name}")
+            create_tables(engine)
+        problems = schema_problems(engine)
         for problem in problems:
             print(problem)
-        if problems:
-            print("Existing schemas are not migrated automatically. Check the database configuration.")
+        if not problems:
+            print("OK: shared news tables and parser queue tables are ready")
         return int(bool(problems))
     finally:
         engine.dispose()

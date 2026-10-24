@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from .collector import CollectionError, collect, normalize_url, result
 from .database import Base, engine, get_db
+from .schema import initialize_database
 from .publications import parse_publication, public_result
 
 # Single process prototype: reject overlapping runs rather than hammering the source.
@@ -25,7 +26,7 @@ _last_finished = 0.0
 @asynccontextmanager
 async def lifespan(app):
     queue_backend()  # fail fast on a misspelled queue mode
-    Base.metadata.create_all(engine)
+    initialize_database(engine)
     yield
     engine.dispose()
 

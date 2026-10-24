@@ -25,7 +25,8 @@ def main():
     from parser_app.celery_app import celery_app
     from parser_app.database import Base, engine
     from parser_app import models
-    Base.metadata.create_all(engine)
+    from parser_app.schema import initialize_database
+    initialize_database(engine)
     engine.dispose()
     if args.mode == "worker":
         celery_app.worker_main(["worker", "--loglevel", args.log_level, "--pool", args.pool,

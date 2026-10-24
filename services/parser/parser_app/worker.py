@@ -46,7 +46,8 @@ def main():
     from .broker import queue_backend
     if queue_backend() != "local":
         parser.error("Use scripts/run_celery.py worker and beat when PARSER_QUEUE_BACKEND=celery")
-    Base.metadata.create_all(engine)
+    from .schema import initialize_database
+    initialize_database(engine)
     try:
         while True:
             counts = run_batch(limit=args.limit)

@@ -10,6 +10,7 @@ from .adapters import adapter_for
 from .errors import CollectionError
 from .models import NewsRaw, NewsSource, QueueSourceState
 from .publications import parse_publication
+from .ml_export import export_publication
 
 MAX_ATTEMPTS = 3
 LEASE = timedelta(minutes=15)
@@ -72,6 +73,8 @@ def enqueue(db, urls):
                         db.flush()
                 except IntegrityError:
                     item = db.scalar(select(NewsRaw).where(NewsRaw.source_id == source.id, NewsRaw.url == url))
+            if item.status == "ready":
+                export_publication(db, item)
             items.append(item)
         db.commit()
         return items
@@ -157,6 +160,11 @@ def process_claim(db, client, claim, *, now=None):
     completed = db.execute(update(NewsRaw).execution_options(synchronize_session=False).where(NewsRaw.id == claim.id,
         NewsRaw.status == "processing", NewsRaw.attempt_count == claim.attempt,
         NewsRaw.processing_started_at == claim.started_at).values(**values)).rowcount
+    if completed and values["status"] == "ready":
+        publication = db.get(NewsRaw, claim.id, populate_existing=True)
+        export_publication(db, publication)
+        db.execute(update(NewsSource).where(NewsSource.id == claim.source_id)
+            .values(last_success_at=finished))
     if completed and cooldown:
         db.execute(update(QueueSourceState).execution_options(synchronize_session=False).where(QueueSourceState.source_id == claim.source_id,
             or_(QueueSourceState.next_request_at.is_(None), QueueSourceState.next_request_at < cooldown))
