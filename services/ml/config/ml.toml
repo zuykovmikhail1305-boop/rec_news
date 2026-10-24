@@ -1,0 +1,191 @@
+# Параметры ML-части: веса, пороги, окна и версии промптов (ТЗ §10).
+# Код читает их через news_pipeline/settings.py; менять значения нужно здесь.
+# Подключение к моделям (адрес LLM, модель, ключ, пути) — в .env, см. .env.example.
+
+pipeline_version = "0.1.0"
+
+[prompts]
+aspects = "aspects-v1"
+topics = "topics-v1"
+importance = "importance-v1"
+rerank = "rerank-v1"
+analytics_check = "analytics-check-v1"
+insight_fact = "insight-fact-v1"
+insight_bank_view = "insight-bank-view-v1"
+insight_ai_conclusion = "insight-ai-conclusion-v1"
+insight_risks = "insight-risks-v1"
+insight_hypothesis = "insight-hypothesis-v1"
+insight_actions = "insight-actions-v1"
+insight_header = "insight-header-v1"
+insight_headline = "insight-headline-v2"
+insight_bank_offer = "insight-bank-offer-v1"
+insight_verifier = "insight-verifier-v1"
+eval_judge = "eval-judge-v1"
+agent_planner = "agent-planner-v2"
+agent_writer = "agent-writer-v1"
+agent_critic = "agent-critic-v1"
+
+[llm_tasks]
+# Какой класс модели решает задачу; имена моделей классов — REC_NEWS_LLM_MODEL_<КЛАСС> в .env.
+#   light     — Gemma 4 26B A4B: классификация и извлечение, массовые дешёвые вызовы
+#   reasoning — GLM-5.3-Flash: глубокий анализ и выводы
+#   universal — Qwen3.6 35B A3B: генерация структурированных данных
+#   relations — DeepSeek-V4.1-Flash: поиск связей между текстами
+#   vision    — Qwen3-VL-30B-A3B-Instruct: изображения (зарезервирована под графики в PDF)
+#   text      — Kimi-K2.6: написание и переработка текстов
+default = "universal"
+topics = "light"                 # темы, тип события, важность — классификация новости
+same_event = "light"             # дедуп: «то же событие?» да/нет
+rerank = "light"                 # оценка 0–3 новости для профиля, до 40 вызовов на ленту
+news_analysis = "light"          # старый NewsAnalyzer: выжимка и шаблон аудитории
+aspects = "universal"            # аспекты интересов: структурированный профиль, раз на пользователя
+analytics_check = "relations"    # LLM-судья: связь новости с фрагментами аналитики, противоречия
+analytics_bridge = "text"        # связка «новость ↔ аналитика» для пользователя
+# карточка инсайта (docs/insight_card.md): агент на каждый блок + проверщик
+insight_fact = "universal"           # факт: извлечь кто/что/когда/цифры, решено или обсуждается
+insight_bank_view = "text"           # позиция банка: пересказ аналитики своими словами
+insight_ai_conclusion = "reasoning"  # вывод AI: как событие затронет компанию через её особенности
+insight_risks = "reasoning"          # риски и возможности
+insight_hypothesis = "reasoning"     # сценарий «если…, то…»
+insight_actions = "reasoning"        # практические шаги под роль
+insight_header = "reasoning"         # чипы: влияние, приоритет, горизонт
+insight_headline = "text"            # одна фраза о значении события для компании
+insight_bank_offer = "universal"     # выбор продукта из каталога или «не предлагать»
+insight_verifier = "relations"       # проверщик: сверка карточки с источниками — другая модель, чем у блоков
+eval_judge = "reasoning"           # оценка лент (scripts/eval_feed.py): судья — не та модель, что ранжирует (rerank)
+synthetic_scenarios = "universal"   # синтетика — тестовые данные: Qwen3.6, Kimi в 5–8 раз дороже
+synthetic_article = "universal"
+synthetic_paraphrase = "universal"
+synthetic_continuation = "universal"
+agent_planner = "reasoning"      # агент: план ответа по вопросу и источникам
+agent_writer = "text"            # агент: текст раздела ответа
+agent_critic = "relations"       # агент: оценщик — другая модель, чем у планировщика и писателей
+
+[llm_reasoning]
+# reasoning_effort для каждой задачи: "none" — без скрытых рассуждений (в разы дешевле и быстрее:
+# у Qwen3.6 и Kimi рассуждения съедают большую часть токенов), "low"/"medium" — с рассуждениями.
+# Пустая строка — параметр не передаётся. Сервер без поддержки параметра получает запрос без него.
+default = "none"
+
+[profile]
+min_aspects = 8
+max_aspects = 15
+max_aspect_cosine = 0.90   # аспекты одного пользователя не дублируют друг друга
+# страны ВЭД весят как контрагенты: для импортёра страна поставок не менее важна
+entity_weights = { company = 1.0, competitor = 0.7, counterparty = 0.6, commodity = 0.5, region = 0.3, country = 0.6 }
+
+[news]
+lead_sentences = 3         # лид для эмбеддингов: заголовок + первые 2–3 предложения
+working_window_days = 7
+
+[dedup]
+near_jaccard = 0.75        # MinHash + LSH по шинглам из 4 слов
+event_cosine = 0.82        # косинус заголовка с лидом для «того же события»
+event_window_hours = 48
+entity_jaccard = 0.5       # подтверждение склейки по сущностям
+development_cosine = 0.65  # «развитие события»: похоже, но не дубль; у несвязанных пар косинус ≤ ~0.5
+development_window_days = 21
+
+[ranking]
+candidates_per_aspect = 100
+max_candidates = 500
+rerank_top = 40
+feed_min = 10
+feed_max = 20
+cos_low = 0.70             # растяжение косинуса для сигнала sem
+cos_high = 0.90
+fresh_tau_hours = 24
+weights = { sem = 0.35, ent = 0.25, topic = 0.20, imp = 0.10, fresh = 0.10 }
+llm_mix = 0.6              # final = llm_mix·llm/3 + (1 − llm_mix)·retrieval
+mmr_lambda = 0.85
+max_per_topic_top10 = 3
+
+[analytics]
+# Подбор аналитики к событиям (ТЗ «подбор аналитики к новостям»).
+chunk_min_tokens = 100     # раздел короче — склеивается со следующим
+chunk_max_tokens = 800     # раздел длиннее — режется по абзацам с перекрытием в 1 абзац
+max_age_days = 365         # предфильтр: аналитика старше не ищется
+dense_top = 20
+bm25_top = 20
+rrf_k = 60
+entity_bonus = 0.2         # cand = rrf_norm + 0.2·Jaccard(сущности) + 0.1·cos(темы)
+topic_bonus = 0.1
+max_chunks_per_material = 2
+min_fresh = 0.1            # fresh = exp(−Δt/τ_темы); ниже — кандидат отбрасывается
+rerank_input = 10          # после фильтра актуальности
+judge_top = 5              # фрагментов в одном вызове LLM-судьи
+min_score = 2              # прикрепляется score ≥ 2 и is_outdated = false
+max_per_event = 3
+# Без LLM: top-1 по реранку, если его косинус не ниже порога; связь — «общая тема».
+fallback_min_rerank = 0.75
+# К LLM-судье идут только фрагменты, у которых с новостью есть общая тема таксономии:
+# общий макрофон по другой теме не помогает понять новость (ТЗ: «просто на ту же тему» не подходит).
+require_topic_overlap = true
+refresh_days = 7           # новая аналитика — повторный подбор для событий за 7 дней
+
+# τ свежести, дни, по группам тем таксономии (id тем из config/references/taxonomy.json)
+[analytics.tau_days]
+default = 180
+monetary_policy = 30
+fx = 30
+inflation = 30
+bonds = 30
+macro = 30
+oil_gas = 45
+metals = 45
+mining = 45
+gold = 45
+agro_food = 45
+chemicals = 45
+regulation = 90
+sanctions = 90
+taxes = 90
+budget = 90
+corporate = 60
+stock_market = 60
+banking = 60
+
+[recommendations]
+# Готовые рекомендации пользователям: POST /pipeline/run → таблица user_news → GET /users/{id}/news.
+per_user = 20              # сколько новостей хранить на пользователя
+window_days = 7            # окно новостей от «текущего момента»
+feed_version = 4           # 4 — retrieval + LLM-реранк + MMR и фильтры разнообразия (как /recommend)
+run_timeout_hours = 3      # запуск обработки, который идёт дольше, считается упавшим (воркер умер)
+
+[agent]
+# Агент бизнес-инсайтов и диалога (docs/agent_tz.md).
+feed_ttl_hours = 24        # последняя лента пользователя считается свежей
+feed_limit = 20
+feed_version = 2           # если свежей ленты нет — быстрая лента без LLM-реранка
+window_days = 14           # окно поиска новостей по вопросу
+search_news = 6            # новости по вопросу из всей базы, кроме ленты
+search_analytics = 4       # фрагменты аналитики по вопросу
+max_news = 6               # в пакете доказательств: N1…N6
+max_analytics = 4          # A1…A4
+min_relevance = 0.40       # ниже — «в подобранных новостях этого нет»
+feed_bonus = 0.05          # новостям из ленты — небольшой приоритет
+news_chars = 700
+analytics_chars = 900
+max_sections = 6
+section_retries = 2        # переписать раздел после программной проверки
+max_iterations = 2         # раундов оценщика
+max_restarts = 1           # полных перезапусков с планировщика из-за ошибок проверки
+accept_score = 3.5         # средняя оценка оценщика для принятия
+min_criterion = 3          # и ни один критерий не ниже
+parallel_writers = 4
+history_turns = 3
+answer_max_chars = 1600
+max_sentence_words = 30
+max_tokens = { planner = 1500, writer = 900, critic = 1000 }
+
+[insight_card]
+# Карточка инсайта: агент на каждый блок → программная проверка → агент-проверщик (docs/insight_card.md).
+max_sources = 5            # публикаций о событии в контексте: N1 (полный текст) + дубли других изданий
+news_chars = 3000          # текст N1 в промпте
+other_news_chars = 600     # лид остальных публикаций
+analytics_chars = 1800     # фрагмент аналитики A1
+block_retries = 2          # переписать блок после программной проверки
+verify_rounds = 3          # проверок агентом-проверщиком (между ними — переписывание блоков с ошибкой)
+parallel_blocks = 3        # агентов блоков одновременно внутри этапа
+pipeline_top = 5           # POST /pipeline/run с insights=true: карточки для первых N новостей пользователя
+max_tokens = { fact = 900, bank_view = 600, ai_conclusion = 900, risks = 900, hypothesis = 500, actions = 700, header = 500, headline = 400, bank_offer = 400, verifier = 1500 }

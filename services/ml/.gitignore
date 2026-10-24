@@ -1,0 +1,16 @@
+# ML-часть (services/ml). Общие правила Python — в корневом .gitignore.
+
+# Базы данных и данные прогонов — вне git: создаются конвейером и скриптами
+data/
+data_eval/
+dataset/*.db
+
+# Локально сохранённые модели эмбеддингов
+models/
+model/
+
+# Кеш ответов LLM
+llm_cache.db
+
+notebooks/
+docs_utils/

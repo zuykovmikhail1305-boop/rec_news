@@ -1,0 +1,44 @@
+"""Реакции пользователей на новости — ``data/feedback.db`` (SQLAlchemy).
+
+Таблица ``feedback``: строка на событие (показ, клик, полезно/не полезно,
+скрыть) из ``POST /feedback``. Ключа нет — события только дописываются.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from sqlalchemy import Column, Float, Integer, MetaData, Table, Text
+
+from news_pipeline.config import DATA_DIR
+from news_pipeline.schemas import FeedbackEvent
+from news_pipeline.storage import db
+
+FEEDBACK_DB = DATA_DIR / "feedback.db"
+
+metadata = MetaData()
+
+FEEDBACK = Table(
+    "feedback", metadata,
+    Column("user_id", Text),
+    Column("news_id", Text),
+    Column("type", Text),
+    Column("value", Float),
+    Column("position", Integer),
+    Column("pipeline_version", Text),
+    Column("timestamp", Text),
+)
+
+
+class FeedbackStore:
+    def __init__(self, path: str | Path = FEEDBACK_DB) -> None:
+        self.engine = db.engine(path)
+        db.ensure_tables(self.engine, [FEEDBACK])
+
+    def add(self, event: FeedbackEvent, pipeline_version: str) -> None:
+        with self.engine.begin() as connection:
+            connection.execute(FEEDBACK.insert().values(
+                user_id=event.user_id, news_id=event.news_id, type=event.type, value=event.value,
+                position=event.position, pipeline_version=event.pipeline_version or pipeline_version,
+                timestamp=event.timestamp.isoformat(),
+            ))

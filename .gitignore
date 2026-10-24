@@ -1,9 +1,7 @@
-
-model/
-
-
-notebooks/
-docs/
+dataset/
+texts/
+scripts_for_tests/
+                                                                                                                                                                                                     
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -71,6 +69,8 @@ db.sqlite3-journal
 # Flask stuff:
 instance/
 .webassets-cache
+
+.claude/
 
 # Scrapy stuff:
 .scrapy
@@ -156,7 +156,6 @@ activemq-data/
 *.sage.py
 
 # Environments
-.env.example
 .env
 .envrc
 .venv
@@ -225,10 +224,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
-# Локально сохранённые модели эмбеддингов
-models/
-
-
-# Кеш ответов LLM
-llm_cache.db
