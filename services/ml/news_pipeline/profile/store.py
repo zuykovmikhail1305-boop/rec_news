@@ -6,7 +6,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from sqlalchemy import Column, MetaData, Table, Text, select
+from sqlalchemy import Column, MetaData, Table, Text, func, select
 
 from news_pipeline.config import DATA_DIR
 from news_pipeline.schemas import InterestProfile, UserProfileIn
@@ -59,6 +59,18 @@ class ProfileStore:
                 "user_id": user.user_id, "input": user.model_dump_json(), "input_hash": self.input_hash(user),
                 "interests": interests.model_dump_json(),
             })
+
+    def inputs(self, *, limit: int | None = None, offset: int = 0) -> list[UserProfileIn]:
+        """Анкеты по ``user_id`` (без профилей интересов — они тяжёлые: в аспектах векторы)."""
+        query = select(PROFILES.c.input).order_by(PROFILES.c.user_id)
+        if limit is not None:
+            query = query.limit(limit).offset(offset)
+        with self.engine.connect() as connection:
+            return [UserProfileIn.model_validate_json(value) for value in connection.scalars(query)]
+
+    def count(self) -> int:
+        with self.engine.connect() as connection:
+            return connection.scalar(select(func.count()).select_from(PROFILES))
 
     def all_ids(self) -> list[str]:
         with self.engine.connect() as connection:

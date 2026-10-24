@@ -89,6 +89,8 @@
 |---|---|---|---|
 | `POST /processing.enqueue` | — | `202` [`Enqueued`](#enqueued) `{"status", "news"}` | — |
 | `GET /processing.result` | — | `200` [`ProcessingResult`](#processingresult) `{"result": bool}` | — |
+| `GET /profiles` | query: `limit`=100 (1–1000), `offset`=0 | `200` [`ProfileList`](#profilelist) | — |
+| `GET /profiles/{user_id}` | — | `200` [`ProfileDetails`](#profiledetails) | `404` нет профиля |
 | `GET /users/{user_id}/news` | query: `limit`=20, `offset`=0, `with_text`=false | `200` [`UserNewsResponse`](#usernewsresponse) | `404` нет профиля |
 | `POST /users/{user_id}/news/{news_id}/insight` | query: `refresh`=false | `200` [`InsightCard`](#insightcard) | `404` нет профиля или новости |
 | `GET /users/{user_id}/news/{news_id}/insight` | — | `200` [`InsightCard`](#insightcard) | `404` карточки ещё нет |
@@ -116,7 +118,50 @@
 - `true` — в базе есть новости со статусом `ready` и обработка не стоит в очереди и не идёт (ленты пересчитаны). Состояние читается из базы, поэтому ответ верный и при воркерах в других процессах.
 - `false` — готовых новостей нет или обработка ещё идёт. Опрашивать раз в 5–10 с после `processing.enqueue`.
 
-### 3.2. Лента пользователя
+### 3.2. Профили пользователей
+
+Профили, по которым ML-часть строит ленты, карточки и чат. Создаются не через API (`MLService.build_profile`,
+скрипты); ручки только читают их.
+
+#### `GET /profiles` — список профилей
+- Параметры: `limit` (1–1000, по умолчанию 100), `offset` (0). Порядок — по `user_id`.
+- Ответ: `200` [`ProfileList`](#profilelist).
+
+```json
+{"total": 25,
+ "items": [{"user_id": "u_01", "role": "собственник бизнеса", "company_name": "Компания U_57706",
+            "industry": "оптовая торговля топливом, металлами, химией и стройматериалами", "company_id": "U_57706"}]}
+```
+
+#### `GET /profiles/{user_id}` — данные пользователя
+- Ответ: `200` [`ProfileDetails`](#profiledetails): анкета, профиль интересов, данные компании, что уже посчитано.
+- Ошибка: `404` — профиля нет.
+- Отвечает за сотые доли секунды: данные компании считаются по датасету при старте сервиса заранее и
+  кэшируются; для профиля, добавленного позже, первый запрос — около 2 с.
+
+```json
+{
+  "user_id": "u_01",
+  "profile": {"user_id": "u_01", "role": "собственник бизнеса", "company_name": "Компания U_57706",
+              "industry": "…", "company_description": "…", "company_id": "U_57706", "regions": [],
+              "products": [], "competitors": [], "counterparties": [], "company_size": null},
+  "interests": {
+    "source": "llm", "pipeline_version": "0.1.0",
+    "aspects": [{"aspect_id": "a1", "title": "Цены на топливо и нефтепродукты", "description": "…",
+                 "examples": ["…"], "keywords": ["…"], "entities": ["…"], "topic": "нефть и газ", "weight": 0.9}],
+    "entities": {"Компания U_57706": 1.0, "Центральная Азия": 0.6, "СПбМТСБ": 0.5},
+    "topic_weights": {"нефть и газ": 1.0, "металлургия": 1.0}
+  },
+  "company_facts": [
+    {"id": "F1", "text": "отрасль — оптовая торговля топливом, металлами, химией и стройматериалами", "kind": "industry", "origin": "анкета"},
+    {"id": "F12", "text": "75% поступлений — от одного покупателя", "kind": "concentration", "origin": "платежи"}
+  ],
+  "activity": {"feed_status": "ready", "feed_total": 20, "feed_computed_at": "2026-10-23T12:26:44Z",
+               "insight_cards": 2, "chat_session_id": "c_8ee28dd2f9db"}
+}
+```
+
+### 3.3. Лента пользователя
 
 #### `GET /users/{user_id}/news` — новости пользователя с аналитикой
 Готовая таблица последней обработки. Отвечает сразу.
@@ -152,7 +197,7 @@
 }
 ```
 
-### 3.3. Карточки инсайтов
+### 3.4. Карточки инсайтов
 
 Что новость значит для компании пользователя, разбитое на блоки: шапка с чипами, главная фраза, факт,
 позиция Альфа-Банка, вывод AI, риски и возможности, гипотеза, что можно сделать, предложение банка,
@@ -190,7 +235,7 @@ timings_ms     {этап: мс}
 
 Пример карточки целиком — в `docs/insight_card.md`.
 
-### 3.4. Задания на генерацию карточек
+### 3.5. Задания на генерацию карточек
 
 #### `POST /users/{user_id}/insights/generate` — карточки для всех новостей пользователя
 - Работает в фоне через очередь задач.
@@ -224,7 +269,7 @@ timings_ms     {этап: мс}
 - Ответ: `200` [`InsightJob`](#insightjob).
 - Ошибка: `404`.
 
-### 3.5. Чат пользователя с агентом
+### 3.6. Чат пользователя с агентом
 
 У каждого пользователя свой чат. Бэкенду не нужно хранить ID диалога: ML-сервис сам ведёт текущий
 диалог пользователя, агент помнит последние реплики и источники, на которые ссылался. Агент отвечает
@@ -311,6 +356,49 @@ timings_ms     {этап: мс}
 | Поле | Тип | Что значит |
 |---|---|---|
 | `result`* | bool | `true` — в базе есть новости `ready` и обработка не стоит в очереди и не идёт; `false` — иначе |
+
+### Профили
+
+#### ProfileList
+`total`* — сколько профилей всего; `items`* — [ProfileListItem](#profilelistitem)[].
+
+#### ProfileListItem
+`user_id`*, `role`*, `company_name`?, `industry`?, `company_id`? (ID компании в датасете, `SYNTHETIC_U`).
+
+#### ProfileDetails
+| Поле | Тип | Что значит |
+|---|---|---|
+| `user_id`* | string | |
+| `profile`* | анкета `UserProfileIn` | `user_id`, `role`, `company_name`?, `industry`?, `company_description`?, `company_id`?, `regions[]`, `products[]`, `competitors[]`, `counterparties[]`, `company_size`? |
+| `interests`* | [ProfileInterests](#profileinterests) | профиль интересов, на нём держится подбор ленты |
+| `company_facts` | [CompanyFactInfo](#companyfactinfo)[] | данные о компании — на них опираются карточки инсайтов |
+| `activity`* | [ProfileActivity](#profileactivity) | что уже посчитано |
+
+#### ProfileInterests
+| Поле | Тип | Что значит |
+|---|---|---|
+| `source`* | `llm` \| `rules` | аспекты написала LLM или построены по правилам (без LLM) |
+| `aspects`* | AspectInfo[] | 8–15 интересов: `aspect_id`, `title`, `description`, `examples[]`, `keywords[]`, `entities[]`, `topic`, `weight` 0–1 |
+| `entities`* | {string: number} | важные пользователю сущности и их вес: своя компания 1.0, конкуренты 0.7, контрагенты и страны ВЭД 0.6, сырьё 0.5, регионы 0.3 |
+| `topic_weights`* | {string: number} | вес тем 0–1 по роли и отрасли |
+| `pipeline_version` | string | версия, которой построен профиль |
+
+#### CompanyFactInfo
+| Поле | Тип | Что значит |
+|---|---|---|
+| `id`* | string | `F1…` — те же ID, что в карточке инсайта |
+| `text`* | string | «есть кредиты», «75% поступлений — от одного покупателя» |
+| `kind`* | string | `industry`, `region`, `size`, `product`, `trade`, `suppliers`, `customers`, `concentration`, `profile` |
+| `origin`* | string | откуда: `анкета`, `dataset` (данные компании), `платежи` (расчёт по платежам) |
+
+#### ProfileActivity
+| Поле | Тип | Что значит |
+|---|---|---|
+| `feed_status`* | `ready` \| `not_computed` | есть ли лента (`GET /users/{id}/news`) |
+| `feed_total` | int | новостей в ленте |
+| `feed_computed_at`? | datetime | когда посчитана лента |
+| `insight_cards` | int | сколько карточек инсайтов построено |
+| `chat_session_id`? | string | текущий диалог в чате; `null` — пользователь ещё не писал |
 
 ### Лента
 

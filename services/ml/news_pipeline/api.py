@@ -3,6 +3,7 @@
     python scripts/run_api.py            # http://127.0.0.1:8000/docs
 
 * обработка новостей из базы: ``POST /processing.enqueue``, ``GET /processing.result``;
+* профили пользователей: ``GET /profiles``, ``GET /profiles/{user_id}``;
 * новости пользователя с аналитикой: ``GET /users/{user_id}/news``;
 * карточка инсайта: ``POST`` / ``GET /users/{user_id}/news/{news_id}/insight``;
 * все карточки пользователя через очередь задач: ``POST /users/{user_id}/insights/generate``,
@@ -20,14 +21,14 @@ import threading
 from collections import defaultdict
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from news_pipeline.agent import AgentAnswer, ChatHistory, UserChatMessage
 from news_pipeline.config import DEMO_NOW
 from news_pipeline.env import env_flag
 from news_pipeline.insights.schemas import InsightCard
-from news_pipeline.schemas import UserNewsResponse
+from news_pipeline.schemas import ProfileDetails, ProfileList, UserNewsResponse
 from news_pipeline.service import MLService
 from news_pipeline.tasks.insight_jobs import NothingToGenerate
 from news_pipeline.tasks.schemas import InsightJob, InsightJobRequest
@@ -48,6 +49,7 @@ async def lifespan(_: FastAPI):
     if env_flag("REC_NEWS_PIPELINE_WORKER", False):  # иначе обработку запускает бэкенд: POST /processing.enqueue
         _service.start_worker()
     _service.resume_unfinished_runs()           # очередь в памяти: незавершённые запуски и карточки — заново
+    _service.submit(_service.warm_up)            # датасет и факты о компаниях профилей — заранее, в фоне
     _service.insight_jobs.resume_unfinished()
     yield
     _service.close()
@@ -84,6 +86,27 @@ def processing_result() -> ProcessingResult:
     """``true`` — есть новости со статусом ``ready`` и обработка завершена (ленты пересчитаны);
     ``false`` — готовых новостей нет или обработка ещё идёт."""
     return ProcessingResult(result=service().processing_result())
+
+
+# --- профили пользователей -------------------------------------------------------------
+
+
+@app.get("/profiles", response_model=ProfileList)
+def get_profiles(limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0)) -> ProfileList:
+    """Профили пользователей, доступные ML-части (по ним строятся ленты, карточки и чат): ``user_id``,
+    роль, компания. По порядку ``user_id``; ``total`` — сколько профилей всего."""
+    return service().profile_list(limit=limit, offset=offset)
+
+
+@app.get("/profiles/{user_id}", response_model=ProfileDetails)
+def get_profile(user_id: str) -> ProfileDetails:
+    """Данные пользователя: анкета, профиль интересов (аспекты, важные сущности, веса тем), данные
+    компании из анкеты и датасета (``F1…`` — на них опираются карточки инсайтов) и что уже посчитано:
+    лента, карточки, чат."""
+    try:
+        return service().profile_details(user_id)
+    except KeyError:
+        raise HTTPException(404, f"профиль {user_id} не найден")
 
 
 # --- новости пользователя ------------------------------------------------------------

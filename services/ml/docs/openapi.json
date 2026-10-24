@@ -43,6 +43,100 @@
         }
       }
     },
+    "/profiles": {
+      "get": {
+        "summary": "Get Profiles",
+        "description": "Профили пользователей, доступные ML-части (по ним строятся ленты, карточки и чат): ``user_id``,\nроль, компания. По порядку ``user_id``; ``total`` — сколько профилей всего.",
+        "operationId": "get_profiles_profiles_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profiles/{user_id}": {
+      "get": {
+        "summary": "Get Profile",
+        "description": "Данные пользователя: анкета, профиль интересов (аспекты, важные сущности, веса тем), данные\nкомпании из анкеты и датасета (``F1…`` — на них опираются карточки инсайтов) и что уже посчитано:\nлента, карточки, чат.",
+        "operationId": "get_profile_profiles__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/users/{user_id}/news": {
       "get": {
         "summary": "Get User News",
@@ -830,6 +924,61 @@
         ],
         "title": "AgentSource"
       },
+      "AspectInfo": {
+        "properties": {
+          "aspect_id": {
+            "type": "string",
+            "title": "Aspect Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "examples": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Examples"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          },
+          "entities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Entities"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight"
+          }
+        },
+        "type": "object",
+        "required": [
+          "aspect_id",
+          "title",
+          "description",
+          "topic",
+          "weight"
+        ],
+        "title": "AspectInfo",
+        "description": "Аспект интереса без вектора."
+      },
       "BankOffer": {
         "properties": {
           "product_id": {
@@ -1176,6 +1325,35 @@
           "label"
         ],
         "title": "Chip"
+      },
+      "CompanyFactInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "kind",
+          "origin"
+        ],
+        "title": "CompanyFactInfo",
+        "description": "Факт о компании из анкеты и датасета — на них опираются карточки инсайтов (``F1…``)."
       },
       "CompanyFeature": {
         "properties": {
@@ -1990,6 +2168,210 @@
         ],
         "title": "ProcessingResult"
       },
+      "ProfileActivity": {
+        "properties": {
+          "feed_status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "not_computed"
+            ],
+            "title": "Feed Status"
+          },
+          "feed_total": {
+            "type": "integer",
+            "title": "Feed Total",
+            "default": 0
+          },
+          "feed_computed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feed Computed At"
+          },
+          "insight_cards": {
+            "type": "integer",
+            "title": "Insight Cards",
+            "default": 0
+          },
+          "chat_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feed_status"
+        ],
+        "title": "ProfileActivity",
+        "description": "Что уже посчитано для пользователя."
+      },
+      "ProfileDetails": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/UserProfileIn"
+          },
+          "interests": {
+            "$ref": "#/components/schemas/ProfileInterests"
+          },
+          "company_facts": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyFactInfo"
+            },
+            "type": "array",
+            "title": "Company Facts"
+          },
+          "activity": {
+            "$ref": "#/components/schemas/ProfileActivity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "profile",
+          "interests",
+          "company_facts",
+          "activity"
+        ],
+        "title": "ProfileDetails"
+      },
+      "ProfileInterests": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "llm",
+              "rules"
+            ],
+            "title": "Source"
+          },
+          "aspects": {
+            "items": {
+              "$ref": "#/components/schemas/AspectInfo"
+            },
+            "type": "array",
+            "title": "Aspects"
+          },
+          "entities": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Entities"
+          },
+          "topic_weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Topic Weights"
+          },
+          "pipeline_version": {
+            "type": "string",
+            "title": "Pipeline Version",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "aspects",
+          "entities",
+          "topic_weights"
+        ],
+        "title": "ProfileInterests",
+        "description": "Профиль интересов, построенный по анкете: на нём держится подбор ленты."
+      },
+      "ProfileList": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "items"
+        ],
+        "title": "ProfileList"
+      },
+      "ProfileListItem": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "role"
+        ],
+        "title": "ProfileListItem",
+        "description": "Профиль в списке: кто это и какая компания."
+      },
       "RiskItem": {
         "properties": {
           "text": {
@@ -2473,6 +2855,108 @@
           "items"
         ],
         "title": "UserNewsResponse"
+      },
+      "UserProfileIn": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "company_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Description"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Id"
+          },
+          "regions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Regions"
+          },
+          "products": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Products"
+          },
+          "competitors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Competitors"
+          },
+          "counterparties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Counterparties"
+          },
+          "company_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "role"
+        ],
+        "title": "UserProfileIn",
+        "description": "Анкета пользователя. ``company_id`` — ID компании в датасете (``SYNTHETIC_U``),\nпо нему профиль дополняется отраслью, контрагентами, ВЭД и продуктами банка."
       },
       "ValidationError": {
         "properties": {

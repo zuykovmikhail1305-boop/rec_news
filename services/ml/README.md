@@ -42,7 +42,7 @@ Swagger: http://127.0.0.1:8002/docs. На Linux используйте `.venv/bi
 
 ## Ручки
 
-`POST /processing.enqueue`, `GET /processing.result`,
+`POST /processing.enqueue`, `GET /processing.result`, `GET /profiles`, `GET /profiles/{user_id}`,
 `GET /users/{user_id}/news`, `POST`/`GET /users/{user_id}/news/{news_id}/insight`,
 `POST /users/{user_id}/insights/generate`, `GET /insights/jobs/{job_id}`,
 `GET /users/{user_id}/insights/jobs/latest`, `POST /insights/jobs/{job_id}/cancel`,
