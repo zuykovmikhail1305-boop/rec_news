@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from news_pipeline.config import FIXTURES_DIR, ROOT_DIR  # noqa: E402
+from news_pipeline.config import FIXTURES_DIR, OCR_GPU, OCR_LANGUAGES, ROOT_DIR  # noqa: E402
 
 TEXTS_DIR = ROOT_DIR / "texts"
 OUT_DIR = FIXTURES_DIR / "analytics"
@@ -55,7 +55,7 @@ def main() -> None:
                 if reader is None:
                     import easyocr
 
-                    reader = easyocr.Reader(["ru", "en"], gpu=False, verbose=False)
+                    reader = easyocr.Reader(OCR_LANGUAGES, gpu=OCR_GPU, verbose=False)
                 parts = []
                 for data in images:
                     from PIL import Image

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from news_pipeline.env import ROOT_DIR, env_float, env_path, env_str
+from news_pipeline.env import ROOT_DIR, env_flag, env_float, env_path, env_str
 
 # --- пути ---------------------------------------------------------------------
 
@@ -42,6 +42,9 @@ DATASET_DIR = env_path("REC_NEWS_DATASET_DIR", ROOT_DIR / "dataset")
 # --- модели -------------------------------------------------------------------
 
 EMBEDDING_MODEL = env_str("REC_NEWS_EMBEDDING_MODEL", "deepvk/USER-bge-m3")
+# OCR сканов в PDF аналитики (scripts/ocr_analytics.py, EasyOCR): языки через запятую и GPU.
+OCR_LANGUAGES = [code.strip() for code in (env_str("REC_NEWS_OCR_LANGUAGES", "ru,en") or "").split(",") if code.strip()]
+OCR_GPU = env_flag("REC_NEWS_OCR_GPU", False)
 
 # OpenAI-совместимый API: при разработке LM Studio, на хакатоне — разрешённая модель.
 LLM_BASE_URL = env_str("REC_NEWS_LLM_BASE_URL", "http://127.0.0.1:1234/v1")
