@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from .auth import (clear_session, csrf_token, current_user_id, remember_profile,
+from auth import (clear_session, csrf_token, current_user_id, remember_profile,
                    set_csrf_cookie, valid_csrf)
-from .ml_client import MLClient, MLUnavailable, ProfileNotFound, get_ml_client
+from ml_client import MLClient, MLUnavailable, ProfileNotFound, get_ml_client
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
