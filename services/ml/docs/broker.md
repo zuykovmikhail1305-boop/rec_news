@@ -170,5 +170,5 @@ Exchange и очереди объявляет воркер при старте. 
   `BEGIN IMMEDIATE`).
 - Схемы и таблицы создаются автоматически, если их нет (как раньше файлы SQLite).
 
-Скрипты оценки (`scripts_for_tests/prepare_eval_news.py`, `eval_feed.py`) всегда работают на локальных
+Скрипты оценки (`scripts_for_tests/rebuild_eval_news.py`, `rebuild_eval_feeds.py`, `eval_feed.py`) всегда работают на локальных
 файлах `data_eval/`: они не трогают общий PostgreSQL, Qdrant-сервер и брокер.
