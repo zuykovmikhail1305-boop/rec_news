@@ -27,6 +27,7 @@ import numpy as np
 
 from news_pipeline.index.embeddig import embed
 from news_pipeline.llm.client import LLM, LLMError, LLMUnavailable, default_llm
+from news_pipeline.prompts import prompt
 from news_pipeline.recommendation.audience_profile import INDUSTRIES, AudienceProfile
 from news_pipeline.references import (
     ENTITIES_BY_ID,
@@ -185,26 +186,7 @@ def _topic_keywords(topic_id: str, base: AudienceProfile) -> list[str]:
 
 # --- аспекты через LLM -------------------------------------------------------
 
-_ASPECTS_PROMPT = """Ты аналитик Альфа-Банка. По описанию руководителя и его компании составь \
-от {min_n} до {max_n} аспектов интереса — типов новостей, которые важны этому человеку \
-для бизнес-решений.
-
-Каждый аспект:
-- aspect_id — латиница и подчёркивания, уникальный;
-- title — 2–5 слов;
-- description — 1–2 предложения языком новостей: какие события и почему важны этой компании;
-- examples — ровно 3 правдоподобных заголовка новостей по аспекту;
-- keywords — 3–6 ключевых слов;
-- entities — организации, товары, страны, валюты, о которых будут такие новости;
-- topic — ровно одна тема из списка ниже (id), без смешения тем;
-- weight — важность 0–1.
-
-Хороший аспект конкретен: «Рост ставок по кредитам для бизнеса — компания финансирует \
-закупки кредитами». Плохой аспект общий: «Экономика».
-Темы аспектов не должны повторяться. Не придумывай факты о компании, которых нет в описании.
-
-Темы (id — название):
-{topics}"""
+_ASPECTS_PROMPT = prompt("profile.aspects")
 
 _ASPECTS_SCHEMA = {
     "type": "object",

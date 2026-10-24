@@ -11,6 +11,7 @@ from __future__ import annotations
 from news_pipeline.agent.schemas import EvidencePack, Issue, Plan, Review, SectionDraft
 from news_pipeline.agent.style import TONE_PROMPT, section_title
 from news_pipeline.llm.client import LLM, LLMError, LLMUnavailable
+from news_pipeline.prompts import prompt
 from news_pipeline.settings import SETTINGS
 
 CRITERIA = {
@@ -23,21 +24,7 @@ CRITERIA = {
     "tone": "голос Альфа-Банка: ясно, спокойно, по делу, без канцелярита, драматизации и категоричности",
 }
 
-_PROMPT = """Ты оценщик ответов ассистента Альфа-Банка для руководителей крупных компаний.
-
-Оцени ответ по шкале 1–5 (5 — отлично, 3 — приемлемо, 1 — плохо) по критериям:
-{criteria}
-
-Будь строгим, но не придирайся к мелочам. Если что-то нужно исправить — добавь в feedback \
-пункт: section_id (ID раздела из ответа или пустая строка для всего ответа), problem — что не так, \
-fix — что конкретно сделать. Не требуй фактов, которых нет в источниках.
-replan = true, только если не подходит сама структура: не тот тип ответа, не те разделы, \
-не хватает раздела; иначе false — тогда разделы перепишут по твоим правкам.
-
-{tone}
-
-Ответ — JSON.
-/no_think"""
+_PROMPT = prompt("agent.critic")
 
 _SCHEMA = {
     "type": "object",

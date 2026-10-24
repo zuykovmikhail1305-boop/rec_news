@@ -23,7 +23,7 @@ import numpy as np
 from qdrant_client import QdrantClient, models
 from sentence_transformers import SentenceTransformer
 
-from news_pipeline.config import EMBEDDING_MODEL, MODELS_DIR, QDRANT_PATH
+from news_pipeline.config import EMBEDDING_MODEL, MODELS_DIR
 
 EMBEDDING_MODEL_NAME = EMBEDDING_MODEL
 VECTOR_NAME = "dense"
@@ -107,8 +107,10 @@ class QdrantIndex:
             self.client = client
         elif url is not None:
             self.client = QdrantClient(url=url, api_key=api_key)
-        else:
-            self.client = QdrantClient(path=str(qdrant_path or QDRANT_PATH))
+        else:  # сервер REC_NEWS_QDRANT_URL (Docker) или локальная база qdrant_path
+            from news_pipeline.index.qdrant import connect
+
+            self.client = connect(qdrant_path)
 
         self.collection_name = collection_name
         self.embedding_model_name = embedding_model

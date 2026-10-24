@@ -39,6 +39,7 @@ from news_pipeline.enrichment.news import extract_entities, topics_by_embedding
 from news_pipeline.index.embeddig import QdrantIndex, TextDocument
 from news_pipeline.insights.numbers import numbers_in
 from news_pipeline.llm.client import LLM, LLMError, LLMUnavailable, default_llm
+from news_pipeline.prompts import prompt
 from news_pipeline.references import TOPICS_BY_NAME, entity_key
 from news_pipeline.schemas import (
     AnalyticsChunk,
@@ -155,20 +156,7 @@ def _utc(moment: datetime) -> datetime:
 
 # --- LLM-судья ------------------------------------------------------------------
 
-_JUDGE_PROMPT = """Ты аналитик банка. Руководителю показывают новость. Реши, какие фрагменты \
-аналитики помогают ему понять эту новость.
-
-Для каждого фрагмента оцени:
-- score: 0 — не связан; 1 — та же тема, но не помогает понять новость; 2 — даёт полезный \
-контекст; 3 — прямо объясняет причины или последствия;
-- relation: "причины" | "прогноз" | "исторический контекст" | "противоречит" | "общая тема";
-- is_outdated: true, если выводы фрагмента уже неактуальны с учётом новости;
-- reason: одно предложение, почему.
-
-Будь строгим: если фрагмент про другую отрасль или тему и даёт лишь общий экономический фон, не объясняя причины или последствия именно этого события, — score 1.
-Не придумывай факты, которых нет в тексте. Ответ — только JSON:
-{"items": [{"id": 1, "score": 0, "relation": "...", "is_outdated": false, "reason": "..."}]}
-/no_think"""
+_JUDGE_PROMPT = prompt("analytics.judge")
 
 _JUDGE_SCHEMA = {
     "type": "object",
@@ -215,13 +203,7 @@ def _judge_validator(count: int) -> Callable[[dict[str, Any]], dict[str, Any]]:
 
 # --- связка для пользователя ---------------------------------------------------
 
-_BRIDGE_PROMPT = """Ты аналитик Альфа-Банка. Напиши 2–3 предложения для руководителя под новостью:
-1. что говорит аналитика банка об этом событии;
-2. что это значит с учётом роли и компании руководителя;
-3. только если во входных данных указано «противоречит новости: да» — скажи прямо: «Аналитика \
-от {date} ожидала обратного…»; иначе не пиши о расхождении.
-Только факты из новости и фрагмента: без новых чисел и дат. Ответ — JSON с полем summary.
-/no_think"""
+_BRIDGE_PROMPT = prompt("analytics.bridge")
 
 
 class AnalyticsMatcher:

@@ -36,6 +36,7 @@ class Settings:
     llm_reasoning: dict[str, str]
     recommendations: dict[str, Any]
     insight_card: dict[str, Any]
+    queue: dict[str, Any]
 
 
 def load_settings(path: str | Path = CONFIG_PATH) -> Settings:
@@ -55,6 +56,7 @@ def load_settings(path: str | Path = CONFIG_PATH) -> Settings:
         llm_reasoning=data.get("llm_reasoning", {}),
         recommendations=data.get("recommendations", {"per_user": 20, "window_days": 7, "feed_version": 4}),
         insight_card=data.get("insight_card", {}),
+        queue=data.get("queue", {}),
     )
 
 

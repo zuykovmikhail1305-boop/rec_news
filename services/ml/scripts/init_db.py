@@ -7,14 +7,16 @@
 
 Что делает:
 
-1. SQLite (``data/``): создаёт все базы с таблицами и индексами — ``news.db``, ``new_summary.db``,
+1. Базы: создаёт все базы с таблицами и индексами — ``news.db``, ``new_summary.db``,
    ``unique.db``, ``analytics.db``, ``profiles.db``, ``recommendations.db``, ``insight_cards.db``,
-   ``jobs.db``, ``chat.db``, ``feedback.db``, ``llm_cache.db``. Базы ранних версий дополняются
-   недостающими колонками, базы старого формата переводятся в новый.
+   ``jobs.db``, ``chat.db``, ``feedback.db``, ``llm_cache.db``: файлы SQLite в ``data/`` или, если задан
+   ``REC_NEWS_DATABASE_URL``, схемы PostgreSQL (``ml_news``, ``ml_new_summary``…). Базы ранних версий
+   дополняются недостающими колонками, базы старого формата переводятся в новый.
 2. Qdrant: коллекции ``news``, ``analytics_chunks``, ``news_audience`` (локальная база ``data/qdrant``
    или сервер ``REC_NEWS_QDRANT_URL``) и индексация аналитики из ``fixtures/analytics``, если её ещё
    нет, — тем же кодом, что сервис при старте (``MLService``). Нужна модель эмбеддингов.
-3. Проверяет окружение: датасет ``dataset/*.db``, модель в ``models/``, ``.env`` и подключение к LLM,
+3. Проверяет окружение: датасет ``dataset/*.db``, модель в ``models/``, ``.env``, брокер очереди
+   (``REC_NEWS_QUEUE=celery``) и подключение к LLM,
    демо-время ``REC_NEWS_DEMO_NOW``; печатает, сколько новостей, профилей и материалов аналитики есть.
 
 Повторный запуск безопасен: существующие данные не удаляются и не перезаписываются. Синтетические
@@ -54,69 +56,46 @@ def main() -> int:
 
     from sqlalchemy import func, inspect, select
 
-    from news_pipeline.agent.store import CHAT_DB, CHAT_FEEDBACK, FEEDS, MESSAGES, SESSIONS, ChatStore
-    from news_pipeline.analytics.store import (
-        ANALYTICS_DB, CHUNKS, EVENT_ANALYTICS, EVENT_RUNS, MATERIALS, AnalyticsStore,
-    )
     from news_pipeline.config import (
         DATA_DIR, DEMO_NOW, EMBEDDING_MODEL, LLM_API_KEY, LLM_BASE_URL, MODELS_DIR, NEWS_DB, QDRANT_PATH,
-        QDRANT_URL, SUMMARY_DB, UNIQUE_DB,
+        QDRANT_URL,
     )
     from news_pipeline.env import ENV_FILE
-    from news_pipeline.insights.store import INSIGHT_CARDS, INSIGHT_CARDS_DB, InsightCardStore
-    from news_pipeline.llm.client import CACHE_PATH, LLM, LLM_CACHE
-    from news_pipeline.profile.store import PROFILES, PROFILES_DB, ProfileStore
-    from news_pipeline.ranking.user_news import PIPELINE_RUNS, RECOMMENDATIONS_DB, USER_NEWS, UserNewsStore
+    from news_pipeline.profile.store import PROFILES_DB, ProfileStore
     from news_pipeline.storage import db
     from news_pipeline.storage.dataset_db import TABLES as DATASET_TABLES
     from news_pipeline.storage.dataset_db import import_csv
-    from news_pipeline.storage.feedback_db import FEEDBACK, FEEDBACK_DB, FeedbackStore
-    from news_pipeline.storage.news_db import (
-        NEWS, NEWS_FINGERPRINT, NEWS_SOURCES, NEWS_SUMMARY, ensure_fingerprint_schema, ensure_schema,
-        ensure_summary_schema, status_counts,
-    )
-    from news_pipeline.tasks.store import ITEMS, JOBS, JOBS_DB, JobStore
+    from news_pipeline.storage.news_db import status_counts
+    from news_pipeline.storage.registry import databases
 
-    # база → (таблицы, как создать)
-    databases = [
-        (NEWS_DB, [NEWS], lambda: ensure_schema(NEWS_DB)),
-        (SUMMARY_DB, [NEWS_SUMMARY, NEWS_SOURCES], lambda: ensure_summary_schema(SUMMARY_DB)),
-        (UNIQUE_DB, [NEWS_SUMMARY, NEWS_SOURCES, NEWS_FINGERPRINT], lambda: ensure_fingerprint_schema(UNIQUE_DB)),
-        (ANALYTICS_DB, [MATERIALS, CHUNKS, EVENT_ANALYTICS, EVENT_RUNS], AnalyticsStore),
-        (PROFILES_DB, [PROFILES], ProfileStore),
-        (RECOMMENDATIONS_DB, [USER_NEWS, PIPELINE_RUNS], UserNewsStore),
-        (INSIGHT_CARDS_DB, [INSIGHT_CARDS], InsightCardStore),
-        (JOBS_DB, [JOBS, ITEMS], JobStore),
-        (CHAT_DB, [SESSIONS, MESSAGES, FEEDS, CHAT_FEEDBACK], ChatStore),
-        (FEEDBACK_DB, [FEEDBACK], FeedbackStore),
-        (CACHE_PATH, [LLM_CACHE], lambda: LLM(cache_path=CACHE_PATH)),
-    ]
     problems: list[str] = []
     notes: list[str] = []
 
     print(f"Каталог баз: {DATA_DIR}" + (" (только проверка)" if args.check else ""))
 
     # --- 1. SQLite ----------------------------------------------------------------------
-    print("\n1. Базы SQLite")
-    for path, tables, create in databases:
+    print("\n1. Базы " + ("PostgreSQL" if db.POSTGRES else "SQLite"))
+    for database in databases():
+        path, models, create = database.path, database.models, database.create
         if not args.check:
             create()
-        if not path.exists():
-            print(f"   ✗ {path.name}: нет файла")
-            problems.append(f"{path.name}: нет базы — запустите без --check")
+        name = db.location(path)
+        if not db.exists(path):
+            print(f"   ✗ {name}: нет базы")
+            problems.append(f"{name}: нет базы — запустите без --check")
             continue
         bind = db.engine(path)
-        existing = set(inspect(bind).get_table_names())
-        missing = [table.name for table in tables if table.name not in existing]
-        with bind.connect() as connection:
-            counts = {table.name: connection.scalar(select(func.count()).select_from(table))
-                      for table in tables if table.name in existing}
+        existing = set(inspect(bind).get_table_names(schema=db.schema_of(bind)))
+        missing = [model.__tablename__ for model in models if model.__tablename__ not in existing]
+        with db.session(bind) as session:
+            counts = {model.__tablename__: session.scalar(select(func.count()).select_from(model))
+                      for model in models if model.__tablename__ in existing}
         summary = ", ".join(f"{name} {count}" for name, count in counts.items())
         if missing:
-            print(f"   ✗ {path.name}: нет таблиц {', '.join(missing)}")
-            problems.append(f"{path.name}: нет таблиц {', '.join(missing)}")
+            print(f"   ✗ {name}: нет таблиц {', '.join(missing)}")
+            problems.append(f"{name}: нет таблиц {', '.join(missing)}")
         else:
-            print(f"   ✓ {path.name}: {summary}")
+            print(f"   ✓ {name}: {summary}")
 
     # --- 2. Qdrant и аналитика ----------------------------------------------------------
     print("\n2. Векторы (Qdrant) и аналитика")
@@ -127,11 +106,11 @@ def main() -> int:
         print(f"   ✗ локальной базы Qdrant нет: {QDRANT_PATH}")  # не открываем: клиент создал бы файлы
         problems.append("Qdrant: нет коллекций — запустите без --check")
     elif args.check:
-        location = QDRANT_URL or QDRANT_PATH
-        try:
-            from qdrant_client import QdrantClient
+        from news_pipeline.index.qdrant import connect, location as qdrant_location
 
-            client = QdrantClient(url=QDRANT_URL) if QDRANT_URL else QdrantClient(path=str(QDRANT_PATH))
+        location = qdrant_location()
+        try:
+            client = connect()
             names = {item.name for item in client.get_collections().collections}
             client.close()
             for name in ("news", "analytics_chunks", "news_audience"):
@@ -140,7 +119,8 @@ def main() -> int:
                     problems.append(f"Qdrant: нет коллекции {name} — запустите без --check")
         except Exception as error:  # noqa: BLE001 - отчёт, а не падение
             print(f"   ✗ Qdrant ({location}) не открылся: {error}")
-            problems.append("Qdrant не открылся — локальную базу держит запущенный API? Остановите его")
+            problems.append("Qdrant не открылся — сервер не запущен (docker compose up -d qdrant) "
+                            "или локальную базу держит запущенный API")
     else:
         if not model_dir.exists():
             print(f"   … модели {EMBEDDING_MODEL} нет в {MODELS_DIR}: она скачается с HuggingFace (нужен интернет)")
@@ -168,11 +148,14 @@ def main() -> int:
     for spec in DATASET_TABLES:
         if args.import_dataset and not args.check and spec.csv_path.exists():
             print(f"   … {spec.csv} → {spec.database}: {import_csv(spec)} строк")
-        if spec.path.exists():
-            with db.engine(spec.path).connect() as connection:
-                tables = inspect(connection).get_table_names()
-                rows = connection.exec_driver_sql(f'SELECT COUNT(*) FROM "{spec.table}"').scalar() \
-                    if spec.table in tables else None
+        if db.exists(spec.path):
+            bind = db.engine(spec.path)
+            present = spec.table in inspect(bind).get_table_names(schema=db.schema_of(bind))
+            if present:
+                with db.session(bind) as session:
+                    rows = session.scalar(select(func.count()).select_from(spec.model))
+            else:
+                rows = None
             print(f"   {'✓' if rows is not None else '✗'} датасет {spec.database}: {rows if rows is not None else 'нет таблицы ' + spec.table}")
         else:
             hint = " (есть CSV — запустите с --import-dataset)" if spec.csv_path.exists() else ""
@@ -191,11 +174,10 @@ def main() -> int:
 
     # --- данные -------------------------------------------------------------------------------
     print("\n4. Данные")
-    if NEWS_DB.exists():
+    if db.exists(NEWS_DB):
         print(f"   новостей: {status_counts(NEWS_DB, 'news')}")
-    if PROFILES_DB.exists():
-        with db.engine(PROFILES_DB).connect() as connection:
-            profiles = connection.scalar(select(func.count()).select_from(PROFILES))
+    if db.exists(PROFILES_DB):
+        profiles = ProfileStore().count()
         print(f"   профилей: {profiles}" + ("" if profiles else " — ленты, карточки и чат будут отвечать 404"))
 
     print("\nИтог: " + ("всё готово" if not problems else "есть проблемы"))

@@ -32,8 +32,9 @@ if __name__ == "__main__":
         original, stored = read_csv(spec.csv_path), read_table(spec)
         same = (list(original.columns) == list(stored.columns) and len(original) == len(stored)
                 and original.fillna("<NA>").astype(str).equals(stored.fillna("<NA>").astype(str)))
-        size = spec.path.stat().st_size / 2**20
-        print(f"{spec.csv} → {spec.database} ({spec.table}): {rows} строк, {size:.1f} МБ, "
+        # размер — только у файла SQLite; в PostgreSQL таблица лежит в схеме
+        size = f"{spec.path.stat().st_size / 2**20:.1f} МБ, " if spec.path.exists() else ""
+        print(f"{spec.csv} → {spec.database} ({spec.table}): {rows} строк, {size}"
               f"{time.monotonic() - started:.0f} с, данные {'совпадают' if same else 'НЕ совпадают'}")
         if not same:
             for column in original.columns:

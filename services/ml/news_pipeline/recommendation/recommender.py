@@ -19,7 +19,7 @@
 
 Запуск для компании из датасета:
 
-    python scripts/recommend.py --company U_26030 --role "финансовый директор"
+    python -m news_pipeline.recommendation.recommender --company U_26030 --role "финансовый директор"
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ from typing import Any, Iterable, Sequence
 from qdrant_client import QdrantClient
 from sentence_transformers import SentenceTransformer
 
-from news_pipeline.config import QDRANT_PATH
 from news_pipeline.storage.dataset_db import COMPANIES, PAYMENTS, exists, read_table
 from news_pipeline.recommendation.audience_profile import ROLES, AudienceProfile, counterparty_industries
 from news_pipeline.index.embeddig import QdrantIndex, TextDocument
@@ -76,7 +75,7 @@ def audience_document(news: ProcessedNews) -> TextDocument | None:
 
 def open_audience_index(
     *,
-    qdrant_path: str | Path = QDRANT_PATH,
+    qdrant_path: str | Path | None = None,
     client: QdrantClient | None = None,
     model: SentenceTransformer | None = None,
 ) -> QdrantIndex:
@@ -110,12 +109,13 @@ class NewsRecommender:
         self,
         index: QdrantIndex | None = None,
         *,
-        qdrant_path: str | Path = QDRANT_PATH,
+        qdrant_path: str | Path | None = None,
     ) -> None:
         """Подключается к коллекции ``news_audience``.
 
-        Если ``index`` не передан, открывает локальную базу ``qdrant_path``.
-        Пока её держит другой процесс (например, ``scripts/run_dedup.py``), открыть её
+        Если ``index`` не передан, подключается к серверу ``REC_NEWS_QDRANT_URL`` или к локальной базе
+        ``qdrant_path``.
+        Пока её держит другой процесс (например, запущенный API), открыть её
         нельзя — тогда передайте готовый индекс или используйте сервер Qdrant.
         """
         self.index = index or open_audience_index(qdrant_path=qdrant_path)
@@ -201,7 +201,7 @@ def main() -> None:
     source.add_argument("--profile-file", type=Path, help="файл с шаблоном характеристики пользователя")
     parser.add_argument("--role", default="генеральный директор", choices=ROLES)
     parser.add_argument("--limit", type=int, default=5)
-    parser.add_argument("--qdrant-path", type=Path, default=QDRANT_PATH)
+    parser.add_argument("--qdrant-path", type=Path, default=None, help="локальная база (по умолчанию — сервер или data/qdrant)")
     args = parser.parse_args()
 
     if args.company:

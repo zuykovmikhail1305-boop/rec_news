@@ -47,8 +47,9 @@ from typing import Any
 from datasketch import MinHash, MinHashLSH
 from qdrant_client import models
 
-from news_pipeline.config import QDRANT_API_KEY, QDRANT_PATH, QDRANT_URL, SUMMARY_DB, UNIQUE_DB
+from news_pipeline.config import SUMMARY_DB, UNIQUE_DB
 from news_pipeline.llm.client import LLM, LLMError, LLMUnavailable, default_llm
+from news_pipeline.prompts import prompt
 from news_pipeline.references import entity_key, source_rating
 from news_pipeline.settings import SETTINGS
 import numpy as np
@@ -111,11 +112,7 @@ def publication_timestamp(value: Any) -> float | None:
     return moment.timestamp()
 
 
-_SAME_EVENT_PROMPT = """Ты редактор новостной ленты. Определи, описывают ли две новости \
-одно и то же событие (перепечатка или пересказ одного факта), или это разные события, \
-в том числе продолжение сюжета с новыми фактами. Ответ — JSON: same_event (true/false) \
-и reason — одно предложение.
-/no_think"""
+_SAME_EVENT_PROMPT = prompt("news.same_event")
 
 # Числа, которые встречаются почти в любой новости и ничего не подтверждают.
 _TRIVIAL_NUMBERS = {str(n) for n in range(0, 10)} | {str(y) for y in range(2020, 2031)}
@@ -173,7 +170,7 @@ class NewsDeduplicator:
         unique_database_path: str | Path = UNIQUE_DB,
         index: QdrantIndex | None = None,
         audience_index: QdrantIndex | None = None,
-        qdrant_path: str | Path = QDRANT_PATH,
+        qdrant_path: str | Path | None = None,
         collection_name: str = "news",
         duplicate_threshold: float = DEFAULT_DUPLICATE_THRESHOLD,
         near_threshold: float = DEFAULT_NEAR_THRESHOLD,
@@ -187,8 +184,8 @@ class NewsDeduplicator:
     ) -> None:
         """Подключает базы данных, общую базу Qdrant с двумя коллекциями и собирает LSH.
 
-        Если ``index`` не передан, создаётся :class:`QdrantIndex`
-        в ``qdrant_path``.
+        Если ``index`` не передан, создаётся :class:`QdrantIndex`: на сервере ``REC_NEWS_QDRANT_URL``
+        или в локальной базе ``qdrant_path`` (по умолчанию ``data/qdrant/storage``).
         Коллекция характеристик ``news_audience`` открывается тем же
         клиентом Qdrant и той же моделью эмбеддингов.
         ``time_window_hours=None`` отключает окно по времени.
@@ -211,10 +208,8 @@ class NewsDeduplicator:
         self.use_llm = use_llm
         self._source_database_path = Path(source_database_path)
         self._unique_database_path = Path(unique_database_path)
-        if index is None:
-            qdrant_path = Path(qdrant_path)
-            index = (QdrantIndex(collection_name, url=QDRANT_URL, api_key=QDRANT_API_KEY) if QDRANT_URL
-                     else QdrantIndex(collection_name, qdrant_path=qdrant_path))
+        if index is None:  # сервер REC_NEWS_QDRANT_URL (Docker) или локальная база (index/qdrant.py)
+            index = QdrantIndex(collection_name, qdrant_path=qdrant_path)
         self.index = index
         self.audience_index = audience_index or open_audience_index(
             qdrant_path=qdrant_path, client=index.client, model=index.model

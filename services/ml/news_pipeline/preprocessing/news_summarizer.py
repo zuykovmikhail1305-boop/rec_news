@@ -17,12 +17,14 @@
 ``news.db`` новости ``new`` (ставит ``processing``), записывает их в
 ``new_summary.db`` со статусом ``new`` и только после этого ставит
 в ``news.db`` статус ``ready``. При ошибке пачка возвращается в ``new``.
-Дальше новость забирает дедупликация (``scripts/run_dedup.py``).
+Дальше новость забирает дедупликация (``dedup/drop_dublicate.py``).
 
 Запуск:
 
-    python scripts/prepare_news.py            # обработать всё, что есть в news.db
-    python scripts/prepare_news.py --watch    # обрабатывать постоянно
+    python -m news_pipeline.preprocessing.news_summarizer            # обработать всё, что есть в news.db
+    python -m news_pipeline.preprocessing.news_summarizer --watch    # обрабатывать постоянно
+
+В работе сервиса подготовку запускает обработка (``POST /processing.enqueue`` или задача ``analytics.analyze``).
 """
 
 from __future__ import annotations
@@ -38,6 +40,7 @@ from typing import Iterable
 from news_pipeline.config import NEWS_DB, SUMMARY_DB
 from news_pipeline.enrichment.news import enrich
 from news_pipeline.preprocessing.cleaning import clean_text, lead
+from news_pipeline.storage import db
 from news_pipeline.storage.news_db import (
     ProcessedNews,
     NEW,
@@ -111,20 +114,20 @@ class NewsSummarizer:
             },
         )
 
-    def process_pending(self) -> ProcessingReport:
-        """Готовит новости ``news.db`` со статусом ``new`` и ставит им ``ready``.
+    def process_pending(self, document_ids: list[str] | None = None) -> ProcessingReport:
+        """Готовит новости ``news.db`` со статусом ``new`` (все или только ``document_ids``) и ставит им ``ready``.
 
         Новости, которые уже есть в ``new_summary.db`` (процесс упал между
         записью и сменой статуса), повторно не записываются — только получают
         ``ready``. Зависшие в ``processing`` дольше 30 минут снова берутся в работу.
         """
         report = ProcessingReport()
-        if not self.source_database_path.exists():
-            self._print(f"{self.source_database_path.name} не найдена — обрабатывать нечего.")
+        if not db.exists(self.source_database_path):
+            self._print(f"{db.location(self.source_database_path)} не найдена — обрабатывать нечего.")
             return report
 
         release_stale(self.source_database_path, "news")
-        pending = claim_news(self.source_database_path)
+        pending = claim_news(self.source_database_path, document_ids)
         done = summary_ids(self.summary_database_path)
         self._print(f"Новостей в {self.source_database_path.name}: {len(pending)}")
 

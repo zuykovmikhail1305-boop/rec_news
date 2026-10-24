@@ -5,6 +5,7 @@
 pipeline_version = "0.1.0"
 
 [prompts]
+# Версии промптов: часть ключа кэша LLM. Тексты промптов — config/prompts.toml; изменили текст — поднимите версию.
 aspects = "aspects-v1"
 topics = "topics-v1"
 importance = "importance-v1"
@@ -97,7 +98,7 @@ cos_high = 0.90
 fresh_tau_hours = 24
 weights = { sem = 0.35, ent = 0.25, topic = 0.20, imp = 0.10, fresh = 0.10 }
 llm_mix = 0.6              # final = llm_mix·llm/3 + (1 − llm_mix)·retrieval
-mmr_lambda = 0.85
+mmr_lambda = 1
 max_per_topic_top10 = 3
 
 [analytics]
@@ -189,3 +190,12 @@ verify_rounds = 3          # проверок агентом-проверщик�
 parallel_blocks = 3        # агентов блоков одновременно внутри этапа
 pipeline_top = 5           # POST /pipeline/run с insights=true: карточки для первых N новостей пользователя
 max_tokens = { fact = 900, bank_view = 600, ai_conclusion = 900, risks = 900, hypothesis = 500, actions = 700, header = 500, headline = 400, bank_offer = 400, verifier = 1500 }
+
+[queue]
+# Задачи через очередь (REC_NEWS_QUEUE=local — потоки в процессе, celery — Celery + RabbitMQ; docs/broker.md).
+analyze_retries = 6          # analytics.analyze: повторов, если новости ещё нет в базе или упала LLM
+analyze_retry_delay_s = 30   # пауза перед первым повтором, дальше вдвое больше (30, 60 … 960 с ≈ 32 мин всего)
+refresh_feeds = true         # после обработки новостей пересчитать ленты пользователей (запуск processing.run)
+feeds_refresh_delay_s = 60   # подождать: новости приходят пачками — один пересчёт на пачку
+feeds_refresh_retry_s = 120  # идёт другой запуск — проверить снова через столько секунд
+feeds_refresh_retries = 30   # …и не больше стольких раз (≈ 1 ч)

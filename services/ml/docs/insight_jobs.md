@@ -66,9 +66,10 @@ POST …/generate ─► InsightJobs.start ─► jobs.db: задание + ст
 | Файл | Что внутри |
 |---|---|
 | `news_pipeline/tasks/messages.py` | сообщение `InsightTask` (JSON) и имя очереди `insights.generate` |
-| `news_pipeline/tasks/queue.py` | интерфейс `TaskQueue` (`publish`, `subscribe`, `close`), реализация `LocalQueue` и выбор реализации `create_queue()` |
+| `news_pipeline/tasks/queue.py` | интерфейс `TaskQueue` (`publish`, `subscribe`, `emit`, `close`), повтор `RetryLater`, реализация `LocalQueue` и выбор реализации `create_queue()` |
+| `news_pipeline/tasks/celery_app.py` | Celery + RabbitMQ: `CeleryQueue`, задачи воркера, приём событий других сервисов |
 | `news_pipeline/tasks/insight_jobs.py` | постановка задания и обработчик сообщения |
-| `news_pipeline/tasks/store.py` | состояние заданий в `data/jobs.db` |
+| `news_pipeline/tasks/store.py` | состояние заданий в `data/jobs.db` (в PostgreSQL — схема `ml_jobs`) |
 
 **`data/jobs.db`:**
 - `insight_jobs` — задание: `job_id`, `user_id`, `status`, `refresh`, время создания, начала и конца;
@@ -76,9 +77,12 @@ POST …/generate ─► InsightJobs.start ─► jobs.db: задание + ст
 
 Счётчики задания не хранятся: они считаются по строкам, поэтому одновременные обработчики не затирают друг друга.
 
-**Сейчас** очередь — пул потоков внутри процесса API (`LocalQueue`). Сообщения в памяти теряются
-при перезапуске, поэтому при старте API незавершённые карточки и запуски обработки снова ставятся
-в очередь (`resume_unfinished`, `resume_unfinished_runs`).
+Очередь выбирается переменной `REC_NEWS_QUEUE`:
+- `local` (по умолчанию) — пул потоков внутри процесса API (`LocalQueue`). Сообщения в памяти теряются
+  при перезапуске, поэтому при старте API незавершённые карточки и запуски обработки снова ставятся
+  в очередь (`resume_unfinished`, `resume_unfinished_runs`);
+- `celery` — Celery + RabbitMQ: API только ставит задачи, выполняют их воркеры Celery, сообщения хранит
+  брокер. Как запустить и как устроен обмен с другими сервисами — `docs/broker.md`.
 
 ## Очереди
 
@@ -86,33 +90,19 @@ POST …/generate ─► InsightJobs.start ─► jobs.db: задание + ст
 |---|---|---|---|---|
 | `processing.run` | `ProcessingTask`: `run_id`, `now`, `user_ids`, `insights_top` | `MLService.handle_processing` | `recommendations.db`, `pipeline_runs` | `POST /processing.enqueue`, `GET /processing.result` |
 | `insights.generate` | `InsightTask`: `job_id`, `user_id`, `news_id`, `refresh` | `InsightJobs.handle` | `jobs.db` | `POST /users/{id}/insights/generate` и ручки заданий |
+| `analytics.analyze` | `AnalyzeNewsTask`: `news_id` | `NewsAnalysis.handle` | статус новости в `news.db` | — (сообщения `NewsDiscovered` / `AnalyzeNews`, docs/broker.md) |
+| `feeds.refresh` | `FeedsRefreshTask` | `NewsAnalysis.handle_feeds` | `pipeline_runs` | — (после обработки новостей) |
 
 Ручки только создают запись в базе и публикуют сообщение, а статус читают из базы. Работу делает
 обработчик очереди, и ему всё равно, в каком процессе он запущен. Обработка новостей — одна за раз:
 новый запуск создаётся атомарно и только если другой не стоит в очереди и не идёт. Запуск, который
 идёт дольше `run_timeout_hours` (`config/ml.toml`, по умолчанию 3 ч), считается упавшим.
 
-## Переход на Celery (сделать позже)
+## Celery
 
-Логика уже не зависит от очереди:
-- сообщение — JSON с полем `version`, имя задачи Celery = имя очереди;
-- обработчики `MLService.handle_processing(body)` и `InsightJobs.handle(body)` принимают тело сообщения;
-- состояние запусков и заданий хранится в базе, а не в памяти процесса API;
-- повторная доставка безопасна: уже взятый запуск или построенная карточка пропускаются, поэтому можно
-  включать `acks_late`.
-
-Что нужно будет сделать:
-1. Написать `CeleryQueue` с интерфейсом `TaskQueue` и `in_process = False`:
-   - `publish(queue, body)` — `celery_app.send_task(queue, args=[body.decode()], queue=queue)`;
-   - `subscribe(queue, handler)` в процессе воркера регистрирует задачу с именем `queue`, которая
-     вызывает `handler(body.encode())`; в процессе API `subscribe` ничего не делает.
-   Вернуть её из `create_queue()` (например, по переменной окружения с адресом брокера).
-2. Запустить воркеры отдельными процессами, каждый создаёт `MLService` и подписывается на очереди:
-   - `processing.run` — строго один воркер с одним потоком (`--concurrency=1`): обработка новостей
-     идёт по одной;
-   - `insights.generate` — сколько нужно параллельных карточек.
-3. Включить Qdrant-сервер: локальную базу `data/qdrant` открывает только один процесс, а с Celery её
-   открывают API и воркеры. Адрес — `REC_NEWS_QDRANT_URL` (и `REC_NEWS_QDRANT_API_KEY`); при пустом
-   адресе используется локальная база.
-4. SQLite-базы `data/*.db` выдерживают несколько процессов на одной машине. Для воркеров на разных
-   машинах их нужно перенести на общий сервер (PostgreSQL): таблицы описаны в SQLAlchemy.
+Переход сделан: `CeleryQueue` (`news_pipeline/tasks/celery_app.py`) реализует тот же интерфейс, обработчики
+не изменились. Имя задачи Celery = имя очереди, аргумент — JSON-сообщение; подтверждение — после
+обработки (`acks_late`), повторная доставка безопасна (взятый запуск или построенная карточка
+пропускаются). Обработка новостей по-прежнему одна за раз: запуск создаётся атомарно, а сама обработка
+идёт под блокировкой `pipeline`, общей для всех процессов (`pg_advisory_lock` в PostgreSQL).
+Запуск воркеров, Qdrant-сервер и PostgreSQL — `docs/broker.md`.

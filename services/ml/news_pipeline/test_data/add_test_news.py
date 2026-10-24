@@ -11,20 +11,17 @@
 Каждая новость — около 2000 символов. Эталонная разметка лежит
 в метаданных новости в ключе ``test``.
 
-Порядок работы:
+Порядок работы (проверка обработки текстов, отдельный каталог ``data_test/``):
 
-1. запустите ``python scripts/add_test_news.py`` — новости добавятся в ``data/news.db``;
-2. запустите ``python scripts/prepare_news.py`` — они перейдут в ``new_summary.db``,
-   и дождитесь, пока ``scripts/run_dedup.py`` проведёт дедупликацию;
-3. запустите ``python scripts/add_test_news.py --check`` — скрипт сравнит
-   содержимое ``unique.db`` с ожидаемым результатом: для каждого дубля
-   по ``metadata["sources"]`` оригинала видно, к какой новости он
-   привязан и на каком шаге каскада (exact, url, near, semantic) пойман.
+1. ``python scripts_for_tests/create_test_news.py`` — первая пачка (20 новостей) и её обработка;
+2. ``python scripts_for_tests/add_test_news.py`` — эта пачка, обработка (:func:`process_news`) и
+   сравнение ``unique.db`` с ожидаемым результатом (:func:`check`): для каждого дубля по
+   ``metadata["sources"]`` оригинала видно, к какой новости он привязан и на каком шаге каскада
+   (exact, url, near, semantic) пойман.
 """
 
 from __future__ import annotations
 
-import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -397,15 +394,31 @@ def duplicate_sources(unique_db: Path) -> dict[str, tuple[str, str, float | None
     return found
 
 
-def check(news_db: Path, unique_db: Path, summary_db: Path) -> None:
-    """Сравнивает содержимое unique.db с ожидаемым результатом."""
+def process_news(*, use_llm: bool = True) -> tuple[int, int]:
+    """Обработка новостей текущего каталога баз: подготовка (``news.db`` → ``new_summary.db``) и
+    дедупликация (→ ``unique.db`` + Qdrant) — тем же кодом, что у сервиса. Возвращает, сколько новостей
+    подготовлено и сколько прошло дедупликацию."""
+    from news_pipeline.dedup.drop_dublicate import NewsDeduplicator
+    from news_pipeline.preprocessing.news_summarizer import NewsSummarizer
+
+    prepared = NewsSummarizer(source_database_path=NEWS_DB, summary_database_path=SUMMARY_DB, use_llm=use_llm,
+                              verbose=False).process_pending()
+    dedup = NewsDeduplicator(source_database_path=SUMMARY_DB, unique_database_path=UNIQUE_DB, use_llm=use_llm,
+                             verbose=False)
+    try:
+        results = dedup.process_pending_news()
+    finally:
+        dedup.close()
+    return len(prepared.processed), len(results)
+
+
+def check(news_db: Path, unique_db: Path, summary_db: Path) -> int:
+    """Сравнивает содержимое unique.db с ожидаемым результатом; возвращает число ошибок."""
     pending = (read_ids(news_db, ("new", "processing")) | summary_ids(summary_db, ("new", "processing"))) & TEST_IDS
     if pending:
-        print(
-            f"Ещё не обработаны: {', '.join(sorted(pending))}. "
-            f"Дождитесь работы scripts/prepare_news.py и scripts/run_dedup.py."
-        )
-        return
+        print(f"Ещё не обработаны: {', '.join(sorted(pending))}. Запустите scripts_for_tests/add_test_news.py "
+              "без --check — он обработает пачку.")
+        return len(pending)
 
     unique = summary_ids(unique_db)
     found = duplicate_sources(unique_db)
@@ -428,20 +441,4 @@ def check(news_db: Path, unique_db: Path, summary_db: Path) -> None:
             actual = f"дубликат {original} [{method}, {score}]"
         print(f"{status} {item.key}: ожидалось «{expected}», получено «{actual}» — {item.title}")
     print(f"\nВерно: {len(TEST_NEWS) - errors} из {len(TEST_NEWS)}.")
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--check", action="store_true", help="проверить результат обработки")
-    parser.add_argument("--news-db", type=Path, default=NEWS_DB)
-    parser.add_argument("--unique-db", type=Path, default=UNIQUE_DB)
-    parser.add_argument("--summary-db", type=Path, default=SUMMARY_DB)
-    args = parser.parse_args()
-    if args.check:
-        check(args.news_db, args.unique_db, args.summary_db)
-    else:
-        add(args.news_db, args.unique_db)
-
-
-if __name__ == "__main__":
-    main()
+    return errors

@@ -2,7 +2,7 @@
 
 :class:`LLM` поверх :class:`news_analyzer.ChatClient` добавляет:
 
-* **кэш** ответов в SQLite (``data/llm_cache.db``, SQLAlchemy) по ключу задачи и версии
+* **кэш** ответов в базе (``data/llm_cache.db``, ORM-модель :class:`LLMCacheEntry`) по ключу задачи и версии
   промпта — одна и та же новость или пара (``user_id``, ``event_id``)
   не уходит в LLM повторно;
 * **журнал** всех вызовов в ``data/logs/llm_calls.jsonl``: задача, промпт,
@@ -37,8 +37,9 @@ from news_pipeline.config import (
     LLM_TEMPERATURE,
     LLM_TIMEOUT_S,
 )
-from sqlalchemy import Column, MetaData, Table, Text, select
+from sqlalchemy import Text
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Mapped, mapped_column
 
 from news_pipeline.llm.news_analyzer import ChatClient, LLMError, _extract_json
 from news_pipeline.settings import SETTINGS, llm_model_for, llm_reasoning_for
@@ -49,15 +50,16 @@ LOG_PATH = DATA_DIR / "logs" / "llm_calls.jsonl"
 
 Validator = Callable[[dict[str, Any]], dict[str, Any]]
 
-_metadata = MetaData()
-LLM_CACHE = Table(
-    "llm_cache", _metadata,
-    Column("key", Text, primary_key=True),     # задача, версия промпта, модель, ключ входа, хеш сообщений
-    Column("task", Text, nullable=False),
-    Column("response", Text, nullable=False),  # проверенный JSON-ответ
-    Column("model", Text),
-    Column("created_at", Text, nullable=False),
-)
+
+
+class LLMCacheEntry(db.Base):
+    __tablename__ = "llm_cache"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)   # задача, версия промпта, модель, ключ входа, хеш
+    task: Mapped[str] = mapped_column(Text)
+    response: Mapped[str] = mapped_column(Text)                # проверенный JSON-ответ
+    model: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(Text)
 
 
 class LLMUnavailable(LLMError):
@@ -100,7 +102,7 @@ class LLM:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         # Кэш пишут несколько потоков и процессов: WAL и ожидание блокировки (storage/db.py).
         self._cache = db.engine(self.cache_path, wal=True)
-        db.ensure_tables(self._cache, [LLM_CACHE])
+        db.ensure_tables(self._cache, [LLMCacheEntry])
 
     # --- доступность ----------------------------------------------------------
 
@@ -209,17 +211,17 @@ class LLM:
         return f"{prefix}:{cache_key}:{digest}"
 
     def _cache_get(self, key: str) -> dict[str, Any] | None:
-        with self._cache.connect() as connection:
-            value = connection.scalar(select(LLM_CACHE.c.response).where(LLM_CACHE.c.key == key))
-        return json.loads(value) if value else None
+        with db.session(self._cache) as session:
+            entry = session.get(LLMCacheEntry, key)
+        return json.loads(entry.response) if entry else None
 
     def _cache_put(self, key: str, task: str, model: str | None, data: dict[str, Any]) -> None:
         try:
-            with self._cache.begin() as connection:
-                connection.execute(db.upsert(LLM_CACHE), {
+            with db.session(self._cache) as session:   # ORM-upsert: ключ могут записать несколько процессов
+                session.execute(db.upsert(LLMCacheEntry), [{
                     "key": key, "task": task, "response": json.dumps(data, ensure_ascii=False), "model": model,
                     "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                })
+                }])
         except OperationalError:
             # Сбой записи в кэш не должен ронять вызов: ответ уже получен.
             pass

@@ -1,9 +1,9 @@
-"""Диалоги агента и последние ленты пользователей — ``data/chat.db`` на SQLAlchemy (docs/agent_tz.md §6).
+"""Диалоги агента и последние ленты пользователей — ``data/chat.db``, ORM-модели (docs/agent_tz.md §6).
 
-* ``sessions`` — сессия чата и зафиксированный пакет доказательств;
-* ``messages`` — реплики пользователя и ответы агента (``AgentAnswer`` в JSON);
-* ``feeds`` — последняя лента пользователя (контекст агента без пересборки);
-* ``chat_feedback`` — оценки ответов.
+* :class:`ChatSession` (``sessions``) — сессия чата и зафиксированный пакет доказательств;
+* :class:`ChatMessage` (``messages``) — реплики пользователя и ответы агента (``AgentAnswer`` в JSON);
+* :class:`UserFeed` (``feeds``) — последняя лента пользователя (контекст агента без пересборки);
+* :class:`ChatFeedbackRow` (``chat_feedback``) — оценки ответов.
 """
 
 from __future__ import annotations
@@ -13,7 +13,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from sqlalchemy import Column, Integer, MetaData, Table, Text, func, select, update
+from sqlalchemy import Integer, Text, func, select
+from sqlalchemy.orm import Mapped, mapped_column
 
 from news_pipeline.agent.schemas import AgentAnswer, ChatFeedback, ChatHistory, ChatTurn, EvidencePack
 from news_pipeline.config import DATA_DIR
@@ -22,43 +23,49 @@ from news_pipeline.storage import db
 
 CHAT_DB = DATA_DIR / "chat.db"
 
-metadata = MetaData()
 
-SESSIONS = Table(
-    "sessions", metadata,
-    Column("session_id", Text, primary_key=True),
-    Column("user_id", Text, nullable=False),
-    Column("created_at", Text, nullable=False),
-    Column("evidence", Text),
-)
+class ChatSession(db.Base):
+    __tablename__ = "sessions"
 
-MESSAGES = Table(
-    "messages", metadata,
-    Column("session_id", Text, primary_key=True),
-    Column("turn", Integer, primary_key=True),
-    Column("role", Text, nullable=False),
-    Column("text", Text, nullable=False),
-    Column("answer", Text),
-    Column("answer_id", Text),
-    Column("created_at", Text, nullable=False),
-)
+    session_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    user_id: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[str | None] = mapped_column(Text)
 
-FEEDS = Table(
-    "feeds", metadata,
-    Column("user_id", Text, primary_key=True),
-    Column("generated_at", Text, nullable=False),
-    Column("feed", Text, nullable=False),
-)
 
-CHAT_FEEDBACK = Table(
-    "chat_feedback", metadata,
-    Column("answer_id", Text),
-    Column("session_id", Text),
-    Column("user_id", Text),
-    Column("type", Text),
-    Column("comment", Text),
-    Column("created_at", Text),
-)
+class ChatMessage(db.Base):
+    __tablename__ = "messages"
+
+    session_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    turn: Mapped[int] = mapped_column(Integer, primary_key=True)
+    role: Mapped[str] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str | None] = mapped_column(Text)
+    answer_id: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(Text)
+
+
+class UserFeed(db.Base):
+    __tablename__ = "feeds"
+
+    user_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    generated_at: Mapped[str] = mapped_column(Text)
+    feed: Mapped[str] = mapped_column(Text)
+
+
+class ChatFeedbackRow(db.Base):
+    __tablename__ = "chat_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    answer_id: Mapped[str | None] = mapped_column(Text)
+    session_id: Mapped[str | None] = mapped_column(Text)
+    user_id: Mapped[str | None] = mapped_column(Text)
+    type: Mapped[str | None] = mapped_column(Text)
+    comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[str | None] = mapped_column(Text)
+
+
+MODELS = [ChatSession, ChatMessage, UserFeed, ChatFeedbackRow]
 
 
 def _now() -> str:
@@ -69,19 +76,20 @@ class ChatStore:
     def __init__(self, path: str | Path = CHAT_DB) -> None:
         self.path = Path(path)
         self.engine = db.engine(self.path, wal=True)
-        db.ensure_tables(self.engine, [SESSIONS, MESSAGES, FEEDS, CHAT_FEEDBACK])
+        db.ensure_tables(self.engine, MODELS)
 
     # --- сессии ---------------------------------------------------------------
 
     def _session_user(self, session_id: str) -> str | None:
-        with self.engine.connect() as connection:
-            return connection.scalar(select(SESSIONS.c.user_id).where(SESSIONS.c.session_id == session_id))
+        with db.session(self.engine) as session:
+            chat = session.get(ChatSession, session_id)
+            return chat.user_id if chat else None
 
     def user_session(self, user_id: str) -> str | None:
         """Текущий (последний) диалог пользователя; ``None`` — пользователь ещё не писал в чат."""
-        with self.engine.connect() as connection:
-            return connection.scalar(select(SESSIONS.c.session_id).where(SESSIONS.c.user_id == user_id)
-                                     .order_by(SESSIONS.c.created_at.desc(), SESSIONS.c.session_id.desc()).limit(1))
+        with db.session(self.engine) as session:
+            return session.scalar(select(ChatSession.session_id).where(ChatSession.user_id == user_id)
+                                  .order_by(ChatSession.created_at.desc(), ChatSession.session_id.desc()).limit(1))
 
     def open_session(self, user_id: str, session_id: str | None) -> str:
         """Существующая сессия пользователя или новая."""
@@ -92,27 +100,28 @@ class ChatStore:
                     raise PermissionError(f"сессия {session_id} принадлежит другому пользователю")
                 return session_id
         session_id = session_id or f"c_{uuid.uuid4().hex[:12]}"
-        with self.engine.begin() as connection:
-            connection.execute(SESSIONS.insert().values(session_id=session_id, user_id=user_id, created_at=_now()))
+        with db.session(self.engine) as session:
+            session.add(ChatSession(session_id=session_id, user_id=user_id, created_at=_now()))
         return session_id
 
     def evidence(self, session_id: str) -> EvidencePack | None:
-        with self.engine.connect() as connection:
-            value = connection.scalar(select(SESSIONS.c.evidence).where(SESSIONS.c.session_id == session_id))
-        return EvidencePack.from_dict(json.loads(value)) if value else None
+        with db.session(self.engine) as session:
+            chat = session.get(ChatSession, session_id)
+        return EvidencePack.from_dict(json.loads(chat.evidence)) if chat and chat.evidence else None
 
     def put_evidence(self, session_id: str, pack: EvidencePack) -> None:
-        with self.engine.begin() as connection:
-            connection.execute(update(SESSIONS).where(SESSIONS.c.session_id == session_id)
-                               .values(evidence=json.dumps(pack.to_dict(), ensure_ascii=False)))
+        with db.session(self.engine) as session:
+            chat = session.get(ChatSession, session_id)
+            if chat is not None:
+                chat.evidence = json.dumps(pack.to_dict(), ensure_ascii=False)
 
     # --- реплики --------------------------------------------------------------
 
     def add_turn(self, session_id: str, role: str, text: str, answer: AgentAnswer | None = None) -> int:
-        with self.engine.begin() as connection:
-            turn = connection.scalar(select(func.coalesce(func.max(MESSAGES.c.turn), 0) + 1)
-                                     .where(MESSAGES.c.session_id == session_id))
-            connection.execute(MESSAGES.insert().values(
+        with db.session(self.engine) as session:
+            turn = session.scalar(select(func.coalesce(func.max(ChatMessage.turn), 0) + 1)
+                                  .where(ChatMessage.session_id == session_id))
+            session.add(ChatMessage(
                 session_id=session_id, turn=turn, role=role, text=text,
                 answer=answer.model_dump_json() if answer else None,
                 answer_id=answer.answer_id if answer else None, created_at=_now(),
@@ -123,18 +132,16 @@ class ChatStore:
         user_id = self._session_user(session_id)
         if user_id is None:
             return None
-        with self.engine.connect() as connection:
-            rows = connection.execute(
-                select(MESSAGES.c.turn, MESSAGES.c.role, MESSAGES.c.text, MESSAGES.c.answer, MESSAGES.c.created_at)
-                .where(MESSAGES.c.session_id == session_id).order_by(MESSAGES.c.turn)
-            ).all()
+        with db.session(self.engine) as session:
+            messages = list(session.scalars(select(ChatMessage).where(ChatMessage.session_id == session_id)
+                                            .order_by(ChatMessage.turn)))
         if limit is not None:
-            rows = rows[-limit:]
+            messages = messages[-limit:]
         turns = [
-            ChatTurn(turn=turn, role=role, text=text,
-                     answer=AgentAnswer.model_validate_json(answer) if answer else None,
-                     created_at=datetime.fromisoformat(created))
-            for turn, role, text, answer, created in rows
+            ChatTurn(turn=message.turn, role=message.role, text=message.text,
+                     answer=AgentAnswer.model_validate_json(message.answer) if message.answer else None,
+                     created_at=datetime.fromisoformat(message.created_at))
+            for message in messages
         ]
         return ChatHistory(session_id=session_id, user_id=user_id, turns=turns)
 
@@ -146,22 +153,20 @@ class ChatStore:
         return [(turn.role, turn.answer.summary if turn.answer else turn.text) for turn in history.turns]
 
     def feedback(self, session_id: str, user_id: str, item: ChatFeedback) -> None:
-        with self.engine.begin() as connection:
-            connection.execute(CHAT_FEEDBACK.insert().values(
-                answer_id=item.answer_id, session_id=session_id, user_id=user_id, type=item.type,
-                comment=item.comment, created_at=_now(),
-            ))
+        with db.session(self.engine) as session:
+            session.add(ChatFeedbackRow(answer_id=item.answer_id, session_id=session_id, user_id=user_id,
+                                        type=item.type, comment=item.comment, created_at=_now()))
 
     # --- ленты ----------------------------------------------------------------
 
     def put_feed(self, feed: FeedResponse) -> None:
-        with self.engine.begin() as connection:
-            connection.execute(db.upsert(FEEDS), {"user_id": feed.user_id, "generated_at": _now(),
-                                                  "feed": feed.model_dump_json()})
+        with db.session(self.engine) as session:
+            session.execute(db.upsert(UserFeed), [{"user_id": feed.user_id, "generated_at": _now(),
+                                                   "feed": feed.model_dump_json()}])
 
     def feed(self, user_id: str, ttl_hours: float) -> FeedResponse | None:
-        with self.engine.connect() as connection:
-            row = connection.execute(select(FEEDS.c.generated_at, FEEDS.c.feed).where(FEEDS.c.user_id == user_id)).first()
+        with db.session(self.engine) as session:
+            row = session.get(UserFeed, user_id)
         if row is None:
             return None
         if datetime.now(timezone.utc) - datetime.fromisoformat(row.generated_at) > timedelta(hours=ttl_hours):
