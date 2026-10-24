@@ -43,6 +43,9 @@ def main():
     if args.limit < 1 or args.poll_interval < 0.1:
         parser.error("--limit >= 1, --poll-interval >= 0.1")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    from .broker import queue_backend
+    if queue_backend() != "local":
+        parser.error("Use scripts/run_celery.py worker and beat when PARSER_QUEUE_BACKEND=celery")
     Base.metadata.create_all(engine)
     try:
         while True:

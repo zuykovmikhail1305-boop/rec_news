@@ -10,6 +10,7 @@ from typing import Annotated, Literal
 from sqlalchemy import select
 from .models import NewsRaw
 from .queue import enqueue, job_result
+from .broker import dispatch_pending, queue_backend
 from sqlalchemy.orm import Session
 
 from .collector import CollectionError, collect, normalize_url, result
@@ -23,6 +24,7 @@ _last_finished = 0.0
 
 @asynccontextmanager
 async def lifespan(app):
+    queue_backend()  # fail fast on a misspelled queue mode
     Base.metadata.create_all(engine)
     yield
     engine.dispose()
@@ -91,7 +93,12 @@ class QueueRequest(BaseModel):
 @app.post("/queue", status_code=202, summary="Поставить публикации в очередь без загрузки")
 def enqueue_pages(body: QueueRequest, db: Session = Depends(get_db)):
     try:
-        return {"items": [job_result(item) for item in enqueue(db, body.urls)]}
+        items = enqueue(db, body.urls)
+        # Serialize before dispatch_pending releases the API session's read transaction.
+        result = {"items": [job_result(item) for item in items]}
+        if queue_backend() == "celery":
+            result["dispatch"] = dispatch_pending(db, item_ids=[item.id for item in items])
+        return result
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 

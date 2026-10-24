@@ -94,3 +94,12 @@ class QueueSourceState(Base):
 
     source_id: Mapped[int] = mapped_column(ForeignKey("news_sources.id"), primary_key=True)
     next_request_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BrokerDispatch(Base):
+    """Recoverable message-publish reservation; results remain in news_raw."""
+    __tablename__ = "parser_broker_dispatch"
+
+    raw_id: Mapped[int] = mapped_column(ForeignKey("news_raw.id"), primary_key=True)
+    token: Mapped[str | None] = mapped_column(String(32))
+    reserved_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
