@@ -1,0 +1,78 @@
+{
+  "ALFA-7M26": {
+    "analytics_id": "a_macro_7m26",
+    "title": "Макростатистика 7М26: данные по рынку труда не подтверждают охлаждения экономики",
+    "published_at": "2026-09-01T10:00:00+03:00",
+    "date_note": "в OCR не распознан день («сентября 2026»), взято 1 сентября",
+    "type": "макростатистика",
+    "author": "Центр макроэкономического анализа Альфа-Банка",
+    "url": "https://alfabank.example/analytics/ALFA-7M26.pdf"
+  },
+  "ALFA-Macro_Insights-Policy_Rate_11Sep": {
+    "analytics_id": "a_policy_rate_11sep",
+    "title": "Ключевая ставка ЦБ РФ: ставка без изменения на 14,0%, риторика стала жестче",
+    "published_at": "2026-09-11T18:00:00+03:00",
+    "type": "макропрогноз",
+    "author": "Центр макроэкономического анализа Альфа-Банка",
+    "url": "https://alfabank.example/analytics/ALFA-Macro_Insights-Policy_Rate_11Sep.pdf"
+  },
+  "ALFA-consumption": {
+    "analytics_id": "a_consumption",
+    "title": "Потребление на пике",
+    "published_at": "2026-08-25T10:00:00+03:00",
+    "date_note": "в OCR не распознан день («августа 2026 г.»), взято 25 августа",
+    "type": "макропрогноз",
+    "author": "Центр макроэкономического анализа Альфа-Банка",
+    "url": "https://alfabank.example/analytics/ALFA-consumption.pdf"
+  },
+  "ALFA-macro_stat1H26": {
+    "analytics_id": "a_macro_1h26",
+    "title": "Макростатистика 1П26: слабый рост 1П26 смещает прогноз роста ВВП на 0,1% за год",
+    "published_at": "2026-08-14T10:00:00+03:00",
+    "date_note": "дата уточняется по первой странице",
+    "type": "макростатистика",
+    "author": "Центр макроэкономического анализа Альфа-Банка",
+    "url": "https://alfabank.example/analytics/ALFA-macro_stat1H26.pdf"
+  },
+  "ALFA_Russian_Steels_1К21PreviewUpdate_15Apr2021": {
+    "analytics_id": "a_steels_1q21",
+    "title": "Российские металлурги: превью результатов 1К21",
+    "published_at": "2021-04-15T10:00:00+03:00",
+    "type": "отраслевой отчёт",
+    "author": "Альфа-Банк",
+    "url": "https://alfabank.example/analytics/ALFA_Russian_Steels_1K21.pdf"
+  },
+  "FI_Strategy_3Q26_22072026": {
+    "analytics_id": "a_fi_strategy_3q26",
+    "title": "Тактический взгляд на 3-й квартал 2026 года: время собирать камни",
+    "published_at": "2026-07-22T10:00:00+03:00",
+    "type": "обзор рынка",
+    "author": "Альфа-Банк",
+    "url": "https://alfabank.example/analytics/FI_Strategy_3Q26_22072026.pdf"
+  },
+  "Gold_digest_August26": {
+    "analytics_id": "a_gold_aug26",
+    "title": "Обзор рынка золота, август 2026",
+    "published_at": "2026-09-02T10:00:00+03:00",
+    "date_note": "дата уточняется по первой странице",
+    "type": "обзор рынка",
+    "author": "Альфа-Банк",
+    "url": "https://alfabank.example/analytics/Gold_digest_August26.pdf"
+  },
+  "Inflation_tracker_02": {
+    "analytics_id": "a_inflation_tracker",
+    "title": "Инфляция 25–31 августа: основные выводы",
+    "published_at": "2026-09-02T19:00:00+03:00",
+    "type": "комментарий",
+    "author": "Центр макроэкономического анализа Альфа-Банка",
+    "url": "https://alfabank.example/analytics/Inflation_tracker_02.pdf"
+  },
+  "Бонд_Бриф_14092026": {
+    "analytics_id": "a_bond_brief_14sep",
+    "title": "Бонд Бриф: итоги недели",
+    "published_at": "2026-09-14T10:00:00+03:00",
+    "type": "обзор рынка",
+    "author": "Альфа-Банк",
+    "url": "https://alfabank.example/analytics/Bond_Brief_14092026.pdf"
+  }
+}

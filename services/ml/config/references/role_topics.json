@@ -1,0 +1,60 @@
+{
+  "version": "role-topics-v2",
+  "comment": "Априорная важность темы для роли, 0–1. Темы, которых нет в списке роли, получают default. Первые семь ролей — целевая аудитория из ТЗ, названия совпадают с ТЗ дословно. Роль сравнивается без учёта регистра, ё/е, дефисов и лишних пробелов; aliases — другие написания роли.",
+  "default": 0.2,
+  "aliases": {
+    "собственник": "собственник бизнеса",
+    "иной сотрудник": "иной сотрудник, влияющий на принятие решений и имеющий доступ к интернет-банку",
+    "другой C-level": "другой C-level-руководитель"
+  },
+  "roles": {
+    "собственник бизнеса": {
+      "macro": 0.8, "monetary_policy": 0.7, "sanctions": 0.8, "corporate": 0.9, "taxes": 0.6,
+      "regulation": 0.7, "stock_market": 0.6, "fx": 0.6, "budget": 0.5
+    },
+    "генеральный директор": {
+      "macro": 0.8, "monetary_policy": 0.6, "sanctions": 0.8, "regulation": 0.8, "corporate": 0.7,
+      "labor": 0.6, "budget": 0.6, "foreign_trade": 0.6, "logistics": 0.5, "fx": 0.5
+    },
+    "финансовый директор": {
+      "monetary_policy": 1.0, "inflation": 0.8, "fx": 0.9, "bonds": 0.9, "banking": 1.0, "taxes": 0.8,
+      "macro": 0.7, "sanctions": 0.6, "stock_market": 0.5
+    },
+    "главный бухгалтер": {
+      "taxes": 1.0, "regulation": 0.8, "banking": 0.5, "labor": 0.5, "fx": 0.4, "monetary_policy": 0.3
+    },
+    "руководитель казначейства": {
+      "monetary_policy": 1.0, "fx": 1.0, "bonds": 0.9, "banking": 1.0, "sanctions": 0.8, "inflation": 0.6,
+      "gold": 0.4
+    },
+    "другой C-level-руководитель": {
+      "macro": 0.6, "regulation": 0.6, "sanctions": 0.6, "labor": 0.5, "monetary_policy": 0.4, "corporate": 0.5
+    },
+    "иной сотрудник, влияющий на принятие решений и имеющий доступ к интернет-банку": {
+      "macro": 0.5, "regulation": 0.5, "monetary_policy": 0.4, "banking": 0.4, "fx": 0.4, "sanctions": 0.4,
+      "corporate": 0.4
+    },
+    "коммерческий директор": {
+      "retail_consumer": 0.9, "inflation": 0.7, "foreign_trade": 0.7, "logistics": 0.6, "macro": 0.5,
+      "fx": 0.5, "corporate": 0.5
+    },
+    "директор по закупкам": {
+      "inflation": 0.8, "logistics": 0.9, "foreign_trade": 0.9, "fx": 0.8, "sanctions": 0.8, "metals": 0.6,
+      "oil_gas": 0.6, "chemicals": 0.5
+    },
+    "директор по ВЭД": {
+      "foreign_trade": 1.0, "sanctions": 1.0, "fx": 0.9, "logistics": 0.9, "regulation": 0.6, "banking": 0.5
+    },
+    "директор по рискам": {
+      "sanctions": 1.0, "monetary_policy": 0.8, "fx": 0.8, "bonds": 0.7, "regulation": 0.8, "macro": 0.7,
+      "banking": 0.6, "regions": 0.4
+    },
+    "юридический директор": {
+      "regulation": 1.0, "taxes": 0.8, "sanctions": 0.9, "corporate": 0.7, "labor": 0.5
+    },
+    "директор по производству": {
+      "manufacturing": 0.9, "energy_utilities": 0.8, "labor": 0.7, "logistics": 0.6, "metals": 0.6,
+      "chemicals": 0.5, "regulation": 0.5
+    }
+  }
+}

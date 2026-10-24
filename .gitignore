@@ -1,3 +1,7 @@
+dataset/
+texts/
+scripts_for_tests/
+                                                                                                                                                                                                     
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -65,6 +69,8 @@ db.sqlite3-journal
 # Flask stuff:
 instance/
 .webassets-cache
+
+.claude/
 
 # Scrapy stuff:
 .scrapy
