@@ -1,246 +1,228 @@
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
+from urllib.parse import quote, urlsplit
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
 
-from . import models, security
-from .auth import get_current_user, remember_user_cookie, logout_cookie
-from .database import get_db
+if __package__:
+    from .auth import (clear_session, csrf_token, current_user_id, remember_profile,
+                       set_csrf_cookie, valid_csrf)
+    from .ml_client import MLClient, MLUnavailable, MLNotReady, ProfileNotFound, get_ml_client
+else:
+    from auth import (clear_session, csrf_token, current_user_id, remember_profile,
+                      set_csrf_cookie, valid_csrf)
+    from ml_client import MLClient, MLUnavailable, MLNotReady, ProfileNotFound, get_ml_client
+
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
-CATEGORY_OPTIONS = [c.value for c in models.BusinessCategory]
-FSO_OPTIONS = [o.value for o in models.FsoExecution]
-SECTOR_OPTIONS = [o.value for o in models.PreviousSector]
-SERVICE_OPTIONS = [o.value for o in models.ServiceModel]
 
-
-def _current(request: Request, db: Session):
-    return get_current_user(request, db)
-
-
-@router.get("/")
-def index(request: Request, db: Session = Depends(get_db)):
-    user = _current(request, db)
-    if user is None:
-        return RedirectResponse("/login", status_code=303)
-    if user.profile is None:
-        return RedirectResponse("/profile/setup", status_code=303)
-    return templates.TemplateResponse(
-        request, "dashboard.html", {"user": user, "profile": user.profile}
-    )
-
-
-@router.get("/register")
-def register_page(request: Request):
-    return templates.TemplateResponse(request, "register.html", {})
-
-
-@router.post("/register")
-def register(
-    request: Request,
-    email: str = Form(...),
-    password: str = Form(...),
-    full_name: str = Form(""),
-    db: Session = Depends(get_db),
-):
-    if "@" not in email or "." not in email.split("@")[1]:
-        return templates.TemplateResponse(
-            request,
-            "register.html",
-            {"error": "Введите корректный email"},
-            status_code=400,
-        )
-    if len(password) < 6:
-        return templates.TemplateResponse(
-            request,
-            "register.html",
-            {"error": "Пароль должен содержать не менее 6 символов"},
-            status_code=400,
-        )
-    existing = db.query(models.User).filter(models.User.email == email).first()
-    if existing:
-        return templates.TemplateResponse(
-            request,
-            "register.html",
-            {"error": "Пользователь с таким email уже существует"},
-            status_code=400,
-        )
-    user = models.User(
-        email=email,
-        hashed_password=security.hash_password(password),
-        full_name=full_name,
-    )
+def safe_url(value):
+    if not isinstance(value, str):
+        return None
     try:
-        db.add(user)
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        return templates.TemplateResponse(
-            request,
-            "register.html",
-            {"error": "Пользователь с таким email уже существует"},
-            status_code=400,
-        )
-    db.refresh(user)
-    resp = RedirectResponse("/profile/setup", status_code=303)
-    remember_user_cookie(resp, db, user)
-    return resp
+        parsed = urlsplit(value)
+        return value if parsed.scheme in ("https", "http") and parsed.hostname and not parsed.username else None
+    except ValueError:
+        return None
+
+
+def local_date(value):
+    if not value:
+        return ""
+    try:
+        dt = value if isinstance(value, datetime) else datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo:
+            dt = dt.astimezone(timezone(timedelta(hours=3)))
+        return dt.strftime("%d.%m.%Y")
+    except (ValueError, TypeError, AttributeError):
+        return ""
+
+
+templates.env.filters.update(safe_url=safe_url, local_date=local_date,
+                             path_id=lambda value: quote(str(value), safe=""))
+
+
+def feed_state(ml, user_id, offset=0):
+    feed, job, error = None, None, None
+    try:
+        feed = ml.feed(user_id, limit=20, offset=offset)
+    except (ProfileNotFound, MLNotReady):
+        error = "Лента пользователя ещё не подготовлена."
+    except MLUnavailable:
+        error = "Не удалось загрузить инсайты. Попробуйте ещё раз."
+    try:
+        job = ml.latest_job(user_id)
+    except ProfileNotFound:
+        pass
+    except (MLUnavailable, MLNotReady):
+        error = error or "Не удалось обновить состояние подготовки карточек."
+    return feed, job, error
+
+
+def feed_context(feed, job, error, offset=0):
+    return {"feed": feed, "job": job, "feed_error": error, "offset": offset,
+            "item_states": {item.news_id: item.status for item in job.items} if job else {}}
+
+
+def json_response(data, status=200):
+    return JSONResponse(data, status_code=status, headers={"Cache-Control": "no-store"})
+
+
+def page(request, template, context, status=200):
+    response = templates.TemplateResponse(request, template, context, status_code=status)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def login_page(request, ml, *, offset=0, error=None, status=200):
+    profiles = None
+    try:
+        profiles = ml.profiles(limit=50, offset=offset)
+    except (MLUnavailable, ProfileNotFound):
+        error = error or "Профили пока недоступны. Запустите ML-сервис и попробуйте ещё раз."
+        status = 503
+    token = csrf_token(request)
+    response = page(request, "demo_login.html", {"profiles": profiles, "error": error,
+                    "csrf": token, "offset": offset, "page_size": 50}, status)
+    set_csrf_cookie(response, token)
+    return response
 
 
 @router.get("/login")
-def login_page(request: Request):
-    return templates.TemplateResponse(request, "login.html")
+def login(request: Request, offset: int = Query(0, ge=0), switch: bool = False,
+          ml: MLClient = Depends(get_ml_client)):
+    if current_user_id(request) and not switch:
+        return RedirectResponse("/", status_code=303)
+    return login_page(request, ml, offset=offset)
 
 
 @router.post("/login")
-def login(
-    request: Request,
-    email: str = Form(...),
-    password: str = Form(...),
-    db: Session = Depends(get_db),
-):
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if user is None or not security.verify_password(password, user.hashed_password):
-        return templates.TemplateResponse(
-            request,
-            "login.html",
-            {"error": "Неверный email или пароль"},
-            status_code=400,
-        )
-    resp = RedirectResponse("/", status_code=303)
-    remember_user_cookie(resp, db, user)
-    return resp
+def select_profile(request: Request, user_id: Annotated[str, Form(min_length=1, max_length=200)],
+                   csrf: Annotated[str, Form()], ml: MLClient = Depends(get_ml_client)):
+    if not valid_csrf(request, csrf):
+        return login_page(request, ml, error="Форма устарела. Выберите профиль ещё раз.", status=403)
+    try:
+        details = ml.profile(user_id)
+    except ProfileNotFound:
+        return login_page(request, ml, error="Этот профиль больше не доступен. Выберите другой.", status=404)
+    except MLUnavailable as exc:
+        return login_page(request, ml, error=str(exc), status=503)
+    response = RedirectResponse("/", status_code=303)
+    remember_profile(response, details.user_id)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
-@router.get("/profile/setup")
-def profile_setup(request: Request, db: Session = Depends(get_db)):
-    user = _current(request, db)
-    if user is None:
+@router.get("/")
+def home(request: Request, offset: int = Query(0, ge=0), ml: MLClient = Depends(get_ml_client)):
+    user_id = current_user_id(request)
+    if user_id is None:
         return RedirectResponse("/login", status_code=303)
-    profile = user.profile
-    selected_categories = (
-        (profile.categories or "").split(",") if profile and profile.categories else []
-    )
-    selected_service_models = (
-        (profile.service_models or "").split(",")
-        if profile and profile.service_models
-        else []
-    )
-    return templates.TemplateResponse(
-        request,
-        "profile_setup.html",
-        {
-            "user": user,
-            "profile": profile,
-            "categories": CATEGORY_OPTIONS,
-            "fso_options": FSO_OPTIONS,
-            "sector_options": SECTOR_OPTIONS,
-            "service_options": SERVICE_OPTIONS,
-            "selected_categories": selected_categories,
-            "selected_service_models": selected_service_models,
-        },
-    )
+    try:
+        details = ml.profile(user_id)
+    except ProfileNotFound:
+        response = RedirectResponse("/login", status_code=303)
+        clear_session(response)
+        return response
+    except MLUnavailable:
+        details = None
+    token = csrf_token(request)
+    feed, job, error = feed_state(ml, user_id, offset) if details else (None, None, None)
+    response = page(request, "demo_home.html", {"details": details, "user_id": user_id,
+                    "csrf": token, **feed_context(feed, job, error, offset)}, status=200 if details else 503)
+    set_csrf_cookie(response, token)
+    return response
 
 
-@router.post("/profile/setup")
-def profile_setup_post(
-    request: Request,
-    db: Session = Depends(get_db),
-    categories: list[str] = Form([]),
-    activity_description: str = Form(""),
-    fso_execution: str | None = Form(None),
-    previous_sector: str | None = Form(None),
-    holding_center_employee: str | None = Form(None),
-    service_models: list[str] = Form([]),
-):
-    user = _current(request, db)
-    if user is None:
-        return RedirectResponse("/login", status_code=303)
 
-    if not categories or not activity_description.strip():
-        profile = user.profile
-        selected_categories = (
-            (profile.categories or "").split(",")
-            if profile and profile.categories
-            else []
-        )
-        selected_service_models = (
-            (profile.service_models or "").split(",")
-            if profile and profile.service_models
-            else []
-        )
-        return templates.TemplateResponse(
-            request,
-            "profile_setup.html",
-            {
-                "user": user,
-                "profile": profile,
-                "categories": CATEGORY_OPTIONS,
-                "fso_options": FSO_OPTIONS,
-                "sector_options": SECTOR_OPTIONS,
-                "service_options": SERVICE_OPTIONS,
-                "selected_categories": selected_categories,
-                "selected_service_models": selected_service_models,
-                "error": "Укажите хотя бы одну категорию и опишите характер деятельности",
-            },
-            status_code=400,
-        )
-
-    profile = user.profile or models.UserProfile(user_id=user.id)
-    profile.categories = ",".join(categories)
-    profile.activity_description = activity_description
-    profile.fso_execution = fso_execution
-    profile.previous_sector = previous_sector
-    profile.holding_center_employee = holding_center_employee == "yes"
-    profile.service_models = ",".join(service_models)
-    user.profile = profile
-    db.add(profile)
-    db.commit()
-
-    return RedirectResponse("/", status_code=303)
-
-
-@router.get("/logout")
-def logout():
-    r = RedirectResponse("/login", status_code=303)
-    logout_cookie(r)
-    return r
-
-
-# ---------- Прототип «Инсайты» ----------
-# Декомпозированный прототип: разметка экранов лежит в services/web/web_app/templates/insights/*.html,
-# стили и логика — в services/web/web_app/static/insights.{css,data,app}.js. Оригинал
-# alfa-insights-prototype.html в папке services/web остаётся эталоном.
-_INSIGHTS_TPL_DIR = Path(__file__).parent / "templates" / "insights"
+@router.post("/logout")
+def logout(request: Request, csrf: Annotated[str, Form()]):
+    if not valid_csrf(request, csrf):
+        return page(request, "demo_error.html", {"message": "Форма устарела. Обновите страницу и повторите выход."}, 403)
+    response = RedirectResponse("/login", status_code=303)
+    clear_session(response)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @router.get("/insights")
-def insights_redirect():
-    return RedirectResponse("/insights/prototype", status_code=302)
-
-
 @router.get("/insights/prototype")
-def insights_prototype(request: Request):
-    return templates.TemplateResponse(request, "insights/prototype.html")
+def insights(request: Request):
+    return RedirectResponse("/" if current_user_id(request) else "/login", status_code=303)
 
 
-@router.get("/insights/parser")
-def insights_parser(request: Request):
-    """Интерактивная, полностью локальная демонстрация news-parser pipeline."""
-    return templates.TemplateResponse(request, "insights/parser.html")
+@router.post("/api/insights/generate")
+def generate_insights(request: Request, csrf: Annotated[str, Form()], ml: MLClient = Depends(get_ml_client)):
+    user_id = current_user_id(request)
+    if user_id is None:
+        return json_response({"detail": "Нужен вход"}, 401)
+    if not valid_csrf(request, csrf):
+        return json_response({"detail": "Форма устарела. Обновите страницу."}, 403)
+    try:
+        job = ml.generate_insights(user_id)
+        return json_response({"user_id": user_id, "job": job.model_dump(mode="json")}, 202)
+    except MLNotReady:
+        return json_response({"detail": "Для этого профиля ещё не подготовлена лента. Генерация пока недоступна."}, 409)
+    except ProfileNotFound:
+        return json_response({"detail": "Для этого профиля пока нет новостей для генерации."}, 404)
+    except MLUnavailable:
+        return json_response({"detail": "Не удалось запустить подготовку инсайтов. Попробуйте ещё раз."}, 503)
 
 
-@router.get("/insights/tpl/{name}")
-def insights_tpl(name: str):
-    # Отдаём HTML-фрагмент без обработки Jinja2 (только токены JS-загрузчика).
-    if "/" in name or "\\" in name or ".." in name or name.startswith("."):
-        raise HTTPException(status_code=404, detail="template not found")
-    path = _INSIGHTS_TPL_DIR / f"{name}.html"
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="template not found")
-    return FileResponse(path, media_type="text/html")
+@router.get("/api/insights")
+def get_insights(request: Request, offset: int = Query(0, ge=0), ml: MLClient = Depends(get_ml_client)):
+    user_id = current_user_id(request)
+    if user_id is None:
+        return json_response({"detail": "Нужен вход"}, 401)
+    feed, job, error = feed_state(ml, user_id, offset)
+    context = feed_context(feed, job, error, offset)
+    html = templates.env.get_template("insights_live_feed.html").render(**context)
+    return json_response({"user_id": user_id, "html": html,
+        "poll": bool(job and job.status in ("queued", "running")), "error": error}, 200 if feed else 503)
+
+
+def card_state(ml, user_id, news_id):
+    try:
+        return ml.insight(user_id, news_id), "ready", None
+    except ProfileNotFound:
+        try:
+            job = ml.latest_job(user_id)
+        except (ProfileNotFound, MLUnavailable, MLNotReady):
+            return None, "missing", "Карточка пока не подготовлена. Вернитесь на главную, чтобы запустить подготовку."
+        item = next((item for item in job.items if item.news_id == news_id), None)
+        if item and item.status in ("queued", "running"):
+            return None, "pending", "Карточка готовится. Она появится здесь автоматически."
+        if item and item.status in ("failed", "cancelled"):
+            return None, "failed", "Карточку не удалось подготовить." if item.status == "failed" else "Подготовка карточки отменена."
+        return None, "missing", "Для этой новости пока нет готовой карточки."
+    except (MLUnavailable, MLNotReady):
+        return None, "error", "Не удалось загрузить карточку. Попробуйте ещё раз."
+
+
+@router.get("/insights/{news_id}")
+def insight_page(request: Request, news_id: str, ml: MLClient = Depends(get_ml_client)):
+    user_id = current_user_id(request)
+    if user_id is None:
+        return RedirectResponse("/login", status_code=303)
+    card, state, message = card_state(ml, user_id, news_id)
+    token = csrf_token(request)
+    response = page(request, "insights_live_page.html", {"user_id": user_id, "card": card,
+                    "card_state": state, "message": message, "news_id": news_id, "csrf": token},
+                    status=503 if state == "error" else 200)
+    set_csrf_cookie(response, token)
+    return response
+
+
+@router.get("/api/insights/{news_id}")
+def get_insight(request: Request, news_id: str, ml: MLClient = Depends(get_ml_client)):
+    user_id = current_user_id(request)
+    if user_id is None:
+        return json_response({"detail": "Нужен вход"}, 401)
+    card, state, message = card_state(ml, user_id, news_id)
+    html = templates.env.get_template("insights_live_card.html").render(card=card, card_state=state, message=message)
+    return json_response({"user_id": user_id, "html": html, "poll": state == "pending"}, 503 if state == "error" else 200)

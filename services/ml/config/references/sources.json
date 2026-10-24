@@ -1,0 +1,31 @@
+{
+  "version": "sources-v1",
+  "comment": "Авторитетность источника 1–5 (ТЗ §2). Неизвестный источник получает default.",
+  "default": 2,
+  "sources": {
+    "interfax.example": 5,
+    "tass.example": 5,
+    "rbc.example": 4,
+    "kommersant.example": 4,
+    "vedomosti.example": 4,
+    "business-herald.example": 4,
+    "frank-media.example": 3,
+    "region-news.example": 3,
+    "news-aggregator.example": 2,
+    "telegram-channel.example": 1,
+    "zven-vedomosti.example": 3,
+    "zven-city.example": 2,
+    "techobzor.example": 3,
+    "gadget-news.example": 2,
+    "digital-world.example": 2,
+    "meteo-info.example": 3,
+    "primorye-today.example": 3,
+    "sport-north.example": 2,
+    "science-life.example": 3,
+    "ocean-today.example": 2,
+    "cosmos-news.example": 3,
+    "aero-info.example": 3,
+    "culture-today.example": 2,
+    "art-news.example": 2
+  }
+}

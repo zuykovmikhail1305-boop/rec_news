@@ -1,0 +1,3045 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Новостная аналитика — ML",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/processing.enqueue": {
+      "post": {
+        "summary": "Processing Enqueue",
+        "description": "Обработать новости из ``news.db``: новости со статусом ``new`` проходят подготовку, дедупликацию\nи подбор аналитики (статус ``new → processing → ready``), затем пересчитываются ленты пользователей.\nСтавит задачу в очередь ``processing.run`` и сразу отвечает; готовность — ``GET /processing.result``.\nЕсли обработка уже стоит в очереди или идёт, новая не запускается (``status = already_running``).",
+        "operationId": "processing_enqueue_processing_enqueue_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Enqueued"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/processing.result": {
+      "get": {
+        "summary": "Processing Result",
+        "description": "``true`` — есть новости со статусом ``ready`` и обработка завершена (ленты пересчитаны);\n``false`` — готовых новостей нет или обработка ещё идёт.",
+        "operationId": "processing_result_processing_result_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profiles": {
+      "get": {
+        "summary": "Get Profiles",
+        "description": "Профили пользователей, доступные ML-части (по ним строятся ленты, карточки и чат): ``user_id``,\nроль, компания. По порядку ``user_id``; ``total`` — сколько профилей всего.",
+        "operationId": "get_profiles_profiles_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profiles/{user_id}": {
+      "get": {
+        "summary": "Get Profile",
+        "description": "Данные пользователя: анкета, профиль интересов (аспекты, важные сущности, веса тем), данные\nкомпании из анкеты и датасета (``F1…`` — на них опираются карточки инсайтов) и что уже посчитано:\nлента, карточки, чат.",
+        "operationId": "get_profile_profiles__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{user_id}/news": {
+      "get": {
+        "summary": "Get User News",
+        "description": "Новости, подобранные пользователю при последней обработке, с аналитикой Альфа-Банка.\n``status = not_computed`` — для пользователя ещё не было обработки (``POST /processing.enqueue``).\n``with_text=true`` — полный текст новости и фрагмента аналитики.",
+        "operationId": "get_user_news_users__user_id__news_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "with_text",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Text"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserNewsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{user_id}/news/{news_id}/insight": {
+      "post": {
+        "summary": "Post Insight Card",
+        "description": "Карточка инсайта по новости для пользователя: агент на каждый блок → программная проверка →\nагент-проверщик. Готовая карточка отдаётся сразу, если входные данные не менялись; новая строится\n30–80 с. ``refresh=true`` — построить заново. Контракт блоков — ``docs/insight_card.md``.",
+        "operationId": "post_insight_card_users__user_id__news__news_id__insight_post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "news_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "News Id"
+            }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Refresh"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightCard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Get Insight Card",
+        "description": "Готовая карточка инсайта без построения; ``404`` — её ещё нет (``POST`` той же ручки).",
+        "operationId": "get_insight_card_users__user_id__news__news_id__insight_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "news_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "News Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightCard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{user_id}/insights/generate": {
+      "post": {
+        "summary": "Post Generate Insights",
+        "description": "Запустить генерацию карточек инсайтов для пользователя — по умолчанию для всех его новостей\nиз ``user_news``. Работает в фоне через очередь задач и сразу возвращает задание (``202``);\nход — ``GET /insights/jobs/{job_id}``. Если у пользователя уже идёт задание, новое не создаётся:\nвозвращается текущее со статусом ответа ``200``. Готовые карточки — ``GET /users/{id}/news/{news_id}/insight``.",
+        "operationId": "post_generate_insights_users__user_id__insights_generate_post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/InsightJobRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightJob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/insights/jobs/{job_id}": {
+      "get": {
+        "summary": "Get Insight Job",
+        "description": "Статус задания: ``queued`` → ``running`` → ``done`` (хотя бы одна карточка построена),\n``failed`` (ни одной) или ``cancelled``. ``items`` — статус и заголовок каждой карточки.",
+        "operationId": "get_insight_job_insights_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightJob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{user_id}/insights/jobs/latest": {
+      "get": {
+        "summary": "Get Latest Insight Job",
+        "description": "Последнее задание пользователя.",
+        "operationId": "get_latest_insight_job_users__user_id__insights_jobs_latest_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightJob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/insights/jobs/{job_id}/cancel": {
+      "post": {
+        "summary": "Cancel Insight Job",
+        "description": "Отменить задание: ещё не начатые карточки не строятся, начатые достраиваются.",
+        "operationId": "cancel_insight_job_insights_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightJob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chat/{user_id}": {
+      "post": {
+        "summary": "Post User Chat",
+        "description": "Сообщение пользователя в его чат с агентом. У каждого пользователя свой диалог: бэкенду не нужно\nхранить ``session_id`` — сообщение продолжает текущий диалог пользователя, агент помнит последние\nреплики и источники. ``new_dialog: true`` — начать новый диалог.\n\nАгент отвечает по новостям ленты пользователя и аналитике Альфа-Банка: ``text`` — готовый текст\nответа, ``sections`` — разделы с пометкой ``origin`` (``bank`` — позиция банка, ``ai`` — вывод\nассистента), ``sources`` — источники. Ответ строится до минуты: таймаут клиента — не меньше 120 с.",
+        "operationId": "post_user_chat_chat__user_id__post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserChatMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentAnswer"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Get User Chat",
+        "description": "Текущий диалог пользователя: последние ``limit`` реплик по порядку (у ответов агента — полный\n``answer``). ``session_id = null`` и пустой ``turns`` — пользователь ещё не писал в чат.",
+        "operationId": "get_user_chat_chat__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatHistory"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AIConclusion": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Channels"
+          },
+          "company_features": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyFeature"
+            },
+            "type": "array",
+            "title": "Company Features"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "AIConclusion",
+        "description": "Вывод AI: как событие затронет компанию и на какие её особенности опирается вывод."
+      },
+      "Actions": {
+        "properties": {
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "Actions"
+      },
+      "AgentAnswer": {
+        "properties": {
+          "answer_id": {
+            "type": "string",
+            "title": "Answer Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "best_effort",
+              "degraded",
+              "fallback",
+              "no_evidence",
+              "clarify",
+              "out_of_scope"
+            ],
+            "title": "Status"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSection"
+            },
+            "type": "array",
+            "title": "Sections"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSource"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "clarify": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarify"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "quality": {
+            "$ref": "#/components/schemas/AgentQuality"
+          },
+          "llm_available": {
+            "type": "boolean",
+            "title": "Llm Available",
+            "default": true
+          },
+          "pipeline_version": {
+            "type": "string",
+            "title": "Pipeline Version",
+            "default": ""
+          },
+          "timings_ms": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Timings Ms"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer_id",
+          "session_id",
+          "user_id",
+          "status",
+          "question",
+          "summary",
+          "text",
+          "created_at"
+        ],
+        "title": "AgentAnswer"
+      },
+      "AgentQuality": {
+        "properties": {
+          "iterations": {
+            "type": "integer",
+            "title": "Iterations",
+            "default": 0
+          },
+          "restarts": {
+            "type": "integer",
+            "title": "Restarts",
+            "default": 0
+          },
+          "critic": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Critic"
+          },
+          "checks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Checks"
+          }
+        },
+        "type": "object",
+        "title": "AgentQuality"
+      },
+      "AgentSection": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bank",
+              "ai"
+            ],
+            "title": "Origin"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "origin",
+          "text"
+        ],
+        "title": "AgentSection"
+      },
+      "AgentSource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "news",
+              "analytics",
+              "profile"
+            ],
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "news_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "News Id"
+          },
+          "chunk_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "title"
+        ],
+        "title": "AgentSource"
+      },
+      "AspectInfo": {
+        "properties": {
+          "aspect_id": {
+            "type": "string",
+            "title": "Aspect Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "examples": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Examples"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          },
+          "entities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Entities"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight"
+          }
+        },
+        "type": "object",
+        "required": [
+          "aspect_id",
+          "title",
+          "description",
+          "topic",
+          "weight"
+        ],
+        "title": "AspectInfo",
+        "description": "Аспект интереса без вектора."
+      },
+      "BankOffer": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "risk_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Index"
+          },
+          "cta": {
+            "$ref": "#/components/schemas/CallToAction"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "name",
+          "description",
+          "reason"
+        ],
+        "title": "BankOffer"
+      },
+      "BankView": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "material_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Material Title"
+          },
+          "material_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Material Date"
+          },
+          "section_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "relation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relation"
+          },
+          "contradicts": {
+            "type": "boolean",
+            "title": "Contradicts",
+            "default": false
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          }
+        },
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "title": "BankView",
+        "description": "Позиция Альфа-Банка. ``available = false`` — аналитики по теме нет, вместо блока ``warning``."
+      },
+      "BlockIssue": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "by": {
+            "type": "string",
+            "enum": [
+              "code",
+              "verifier"
+            ],
+            "title": "By",
+            "default": "code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "title": "BlockIssue"
+      },
+      "BlockVerification": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "fixed",
+              "unverified",
+              "failed",
+              "skipped",
+              "fallback"
+            ],
+            "title": "Status"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts",
+            "default": 0
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/BlockIssue"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "BlockVerification"
+      },
+      "CallToAction": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": "Обсудить с менеджером"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action",
+            "default": "contact_manager"
+          }
+        },
+        "type": "object",
+        "title": "CallToAction"
+      },
+      "ChatHistory": {
+        "properties": {
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/ChatTurn"
+            },
+            "type": "array",
+            "title": "Turns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "user_id",
+          "turns"
+        ],
+        "title": "ChatHistory"
+      },
+      "ChatTurn": {
+        "properties": {
+          "turn": {
+            "type": "integer",
+            "title": "Turn"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "turn",
+          "role",
+          "text",
+          "created_at"
+        ],
+        "title": "ChatTurn"
+      },
+      "Chip": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "Chip"
+      },
+      "CompanyFactInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "kind",
+          "origin"
+        ],
+        "title": "CompanyFactInfo",
+        "description": "Факт о компании из анкеты и датасета — на них опираются карточки инсайтов (``F1…``)."
+      },
+      "CompanyFeature": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "CompanyFeature"
+      },
+      "Enqueued": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "news": {
+            "type": "integer",
+            "title": "News"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "news"
+        ],
+        "title": "Enqueued"
+      },
+      "Evidence": {
+        "properties": {
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSource"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "analytics_material": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "company_data": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyFeature"
+            },
+            "type": "array",
+            "title": "Company Data"
+          },
+          "trace": {
+            "items": {
+              "$ref": "#/components/schemas/TraceStep"
+            },
+            "type": "array",
+            "title": "Trace"
+          }
+        },
+        "type": "object",
+        "title": "Evidence"
+      },
+      "EvidenceSource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "news",
+              "analytics"
+            ],
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "outlet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outlet"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "reliability": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Reliability"
+          },
+          "reliability_label": {
+            "type": "string",
+            "title": "Reliability Label"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "title",
+          "reliability",
+          "reliability_label"
+        ],
+        "title": "EvidenceSource"
+      },
+      "Fact": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "decided": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decided"
+          },
+          "discussed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Discussed"
+          },
+          "key_figures": {
+            "items": {
+              "$ref": "#/components/schemas/KeyFigure"
+            },
+            "type": "array",
+            "title": "Key Figures"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "Fact",
+        "description": "Что произошло: сухо, без оценок."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Header": {
+        "properties": {
+          "impact": {
+            "$ref": "#/components/schemas/Chip"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/Chip"
+          },
+          "horizon": {
+            "$ref": "#/components/schemas/Chip"
+          },
+          "reliability": {
+            "$ref": "#/components/schemas/Chip"
+          },
+          "sources_count": {
+            "type": "integer",
+            "title": "Sources Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "impact",
+          "priority",
+          "horizon",
+          "reliability",
+          "sources_count"
+        ],
+        "title": "Header",
+        "description": "Чипы: влияние, приоритет, горизонт, надёжность."
+      },
+      "Headline": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "event_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Date"
+          },
+          "aspect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aspect"
+          },
+          "company_features": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyFeature"
+            },
+            "type": "array",
+            "title": "Company Features"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "based_on_analytics": {
+            "type": "boolean",
+            "title": "Based On Analytics",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "role"
+        ],
+        "title": "Headline",
+        "description": "Главная фраза: что событие значит для компании читателя (не заголовок новости).\n\nСтроится LLM из новости, аналитики Альфа-Банка и профиля; на что она опирается — в полях ниже."
+      },
+      "Hypothesis": {
+        "properties": {
+          "condition": {
+            "type": "string",
+            "title": "Condition"
+          },
+          "consequence": {
+            "type": "string",
+            "title": "Consequence"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer",
+            "default": "Это предположение, а не прогноз."
+          }
+        },
+        "type": "object",
+        "required": [
+          "condition",
+          "consequence",
+          "text"
+        ],
+        "title": "Hypothesis"
+      },
+      "InsightCard": {
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "title": "Card Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "news_id": {
+            "type": "string",
+            "title": "News Id"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "partial",
+              "degraded"
+            ],
+            "title": "Status"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "pipeline_version": {
+            "type": "string",
+            "title": "Pipeline Version"
+          },
+          "header": {
+            "$ref": "#/components/schemas/Header"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Headline"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fact": {
+            "$ref": "#/components/schemas/Fact"
+          },
+          "bank_view": {
+            "$ref": "#/components/schemas/BankView"
+          },
+          "ai_conclusion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AIConclusion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "risks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RisksOpportunities"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Hypothesis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Actions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bank_offer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BankOffer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/Verification"
+          },
+          "timings_ms": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Timings Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "card_id",
+          "user_id",
+          "news_id",
+          "status",
+          "generated_at",
+          "pipeline_version",
+          "header",
+          "fact",
+          "bank_view",
+          "evidence",
+          "verification"
+        ],
+        "title": "InsightCard"
+      },
+      "InsightCardSummary": {
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "title": "Card Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headline"
+          },
+          "impact": {
+            "type": "string",
+            "title": "Impact"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          },
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "reliability": {
+            "type": "string",
+            "title": "Reliability"
+          }
+        },
+        "type": "object",
+        "required": [
+          "card_id",
+          "status",
+          "impact",
+          "priority",
+          "horizon",
+          "reliability"
+        ],
+        "title": "InsightCardSummary",
+        "description": "Краткая карточка для ленты: заголовок и чипы."
+      },
+      "InsightJob": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "queued": {
+            "type": "integer",
+            "title": "Queued",
+            "default": 0
+          },
+          "running": {
+            "type": "integer",
+            "title": "Running",
+            "default": 0
+          },
+          "done": {
+            "type": "integer",
+            "title": "Done",
+            "default": 0
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed",
+            "default": 0
+          },
+          "cancelled": {
+            "type": "integer",
+            "title": "Cancelled",
+            "default": 0
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InsightJobItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "user_id",
+          "status",
+          "refresh",
+          "created_at",
+          "total"
+        ],
+        "title": "InsightJob"
+      },
+      "InsightJobItem": {
+        "properties": {
+          "news_id": {
+            "type": "string",
+            "title": "News Id"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "card_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Id"
+          },
+          "card_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Status"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headline"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "news_id",
+          "position",
+          "status"
+        ],
+        "title": "InsightJobItem"
+      },
+      "InsightJobRequest": {
+        "properties": {
+          "news_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 100,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "News Ids"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "InsightJobRequest",
+        "description": "Какие карточки построить. По умолчанию — для всех новостей пользователя из ``user_news``.\n\n``news_ids`` — только эти новости (в этом порядке); ``limit`` — только первые N новостей ленты;\n``refresh`` — строить заново даже готовые карточки (иначе готовая берётся из базы, если входные\nданные не менялись)."
+      },
+      "KeyFigure": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "KeyFigure"
+      },
+      "ProcessingResult": {
+        "properties": {
+          "result": {
+            "type": "boolean",
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "title": "ProcessingResult"
+      },
+      "ProfileActivity": {
+        "properties": {
+          "feed_status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "not_computed"
+            ],
+            "title": "Feed Status"
+          },
+          "feed_total": {
+            "type": "integer",
+            "title": "Feed Total",
+            "default": 0
+          },
+          "feed_computed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feed Computed At"
+          },
+          "insight_cards": {
+            "type": "integer",
+            "title": "Insight Cards",
+            "default": 0
+          },
+          "chat_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feed_status"
+        ],
+        "title": "ProfileActivity",
+        "description": "Что уже посчитано для пользователя."
+      },
+      "ProfileDetails": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/UserProfileIn"
+          },
+          "interests": {
+            "$ref": "#/components/schemas/ProfileInterests"
+          },
+          "company_facts": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyFactInfo"
+            },
+            "type": "array",
+            "title": "Company Facts"
+          },
+          "activity": {
+            "$ref": "#/components/schemas/ProfileActivity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "profile",
+          "interests",
+          "company_facts",
+          "activity"
+        ],
+        "title": "ProfileDetails"
+      },
+      "ProfileInterests": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "llm",
+              "rules"
+            ],
+            "title": "Source"
+          },
+          "aspects": {
+            "items": {
+              "$ref": "#/components/schemas/AspectInfo"
+            },
+            "type": "array",
+            "title": "Aspects"
+          },
+          "entities": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Entities"
+          },
+          "topic_weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Topic Weights"
+          },
+          "pipeline_version": {
+            "type": "string",
+            "title": "Pipeline Version",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "aspects",
+          "entities",
+          "topic_weights"
+        ],
+        "title": "ProfileInterests",
+        "description": "Профиль интересов, построенный по анкете: на нём держится подбор ленты."
+      },
+      "ProfileList": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "items"
+        ],
+        "title": "ProfileList"
+      },
+      "ProfileListItem": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "role"
+        ],
+        "title": "ProfileListItem",
+        "description": "Профиль в списке: кто это и какая компания."
+      },
+      "RiskItem": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "feature_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Feature Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "RiskItem"
+      },
+      "RisksOpportunities": {
+        "properties": {
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/RiskItem"
+            },
+            "type": "array",
+            "title": "Risks"
+          },
+          "opportunities": {
+            "items": {
+              "$ref": "#/components/schemas/RiskItem"
+            },
+            "type": "array",
+            "title": "Opportunities"
+          }
+        },
+        "type": "object",
+        "title": "RisksOpportunities"
+      },
+      "Signals": {
+        "properties": {
+          "sem": {
+            "type": "number",
+            "title": "Sem"
+          },
+          "ent": {
+            "type": "number",
+            "title": "Ent"
+          },
+          "topic": {
+            "type": "number",
+            "title": "Topic"
+          },
+          "imp": {
+            "type": "number",
+            "title": "Imp"
+          },
+          "fresh": {
+            "type": "number",
+            "title": "Fresh"
+          },
+          "retrieval": {
+            "type": "number",
+            "title": "Retrieval"
+          },
+          "llm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm"
+          },
+          "final": {
+            "type": "number",
+            "title": "Final"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sem",
+          "ent",
+          "topic",
+          "imp",
+          "fresh",
+          "retrieval",
+          "final"
+        ],
+        "title": "Signals"
+      },
+      "TraceStep": {
+        "properties": {
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step",
+          "title",
+          "detail"
+        ],
+        "title": "TraceStep"
+      },
+      "UserChatMessage": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "new_dialog": {
+            "type": "boolean",
+            "title": "New Dialog",
+            "default": false
+          },
+          "now": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Now"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "UserChatMessage",
+        "description": "Сообщение пользователя в его чат (``POST /chat/{user_id}``).\n\nДиалог у пользователя один: сообщение продолжает текущий диалог, и агент помнит последние\nреплики и источники. ``new_dialog = true`` — начать новый диалог (история прежнего сохраняется)."
+      },
+      "UserNewsAnalytics": {
+        "properties": {
+          "analytics_id": {
+            "type": "string",
+            "title": "Analytics Id"
+          },
+          "chunk_id": {
+            "type": "string",
+            "title": "Chunk Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "section_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Title"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "relation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relation"
+          },
+          "contradicts": {
+            "type": "boolean",
+            "title": "Contradicts",
+            "default": false
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "analytics_id",
+          "chunk_id"
+        ],
+        "title": "UserNewsAnalytics",
+        "description": "Фрагмент аналитики Альфа-Банка, прикреплённый к новости для пользователя."
+      },
+      "UserNewsItem": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "news_id": {
+            "type": "string",
+            "title": "News Id"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "lead": {
+            "type": "string",
+            "title": "Lead"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "topics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Topics"
+          },
+          "importance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importance"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "why_relevant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why Relevant"
+          },
+          "analytics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserNewsAnalytics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "insight": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InsightCardSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Signals"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "news_id",
+          "event_id",
+          "title",
+          "lead",
+          "score"
+        ],
+        "title": "UserNewsItem"
+      },
+      "UserNewsResponse": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "not_computed"
+            ],
+            "title": "Status"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "computed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed At"
+          },
+          "pipeline_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pipeline Version"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserNewsItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "status",
+          "items"
+        ],
+        "title": "UserNewsResponse"
+      },
+      "UserProfileIn": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "company_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Description"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Id"
+          },
+          "regions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Regions"
+          },
+          "products": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Products"
+          },
+          "competitors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Competitors"
+          },
+          "counterparties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Counterparties"
+          },
+          "company_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "role"
+        ],
+        "title": "UserProfileIn",
+        "description": "Анкета пользователя. ``company_id`` — ID компании в датасете (``SYNTHETIC_U``),\nпо нему профиль дополняется отраслью, контрагентами, ВЭД и продуктами банка."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "Verification": {
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "passed_with_fixes",
+              "partial",
+              "not_verified"
+            ],
+            "title": "Verdict"
+          },
+          "rounds": {
+            "type": "integer",
+            "title": "Rounds",
+            "default": 0
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "blocks": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BlockVerification"
+            },
+            "type": "object",
+            "title": "Blocks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "verdict"
+        ],
+        "title": "Verification"
+      }
+    }
+  }
+}
