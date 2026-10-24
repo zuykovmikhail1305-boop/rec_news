@@ -1,19 +1,14 @@
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urlsplit
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 if __package__:
-    from .auth import (clear_session, csrf_token, current_user_id, remember_profile,
-                       set_csrf_cookie, valid_csrf)
     from .ml_client import MLClient, MLUnavailable, MLNotReady, ProfileNotFound, get_ml_client
 else:
-    from auth import (clear_session, csrf_token, current_user_id, remember_profile,
-                      set_csrf_cookie, valid_csrf)
     from ml_client import MLClient, MLUnavailable, MLNotReady, ProfileNotFound, get_ml_client
 
 
@@ -79,90 +74,57 @@ def page(request, template, context, status=200):
     return response
 
 
-def login_page(request, ml, *, offset=0, error=None, status=200):
+def profiles_page(request, ml, *, offset=0, error=None, status=200):
     profiles = None
     try:
         profiles = ml.profiles(limit=50, offset=offset)
     except (MLUnavailable, ProfileNotFound):
         error = error or "Профили пока недоступны. Запустите ML-сервис и попробуйте ещё раз."
         status = 503
-    token = csrf_token(request)
-    response = page(request, "demo_login.html", {"profiles": profiles, "error": error,
-                    "csrf": token, "offset": offset, "page_size": 50}, status)
-    set_csrf_cookie(response, token)
-    return response
+    return page(request, "demo_profiles.html", {"profiles": profiles, "error": error,
+                "offset": offset, "page_size": 50}, status)
 
 
-@router.get("/login")
-def login(request: Request, offset: int = Query(0, ge=0), switch: bool = False,
-          ml: MLClient = Depends(get_ml_client)):
-    if current_user_id(request) and not switch:
-        return RedirectResponse("/", status_code=303)
-    return login_page(request, ml, offset=offset)
+@router.get("/profiles")
+def profiles(request: Request, offset: int = Query(0, ge=0), ml: MLClient = Depends(get_ml_client)):
+    return profiles_page(request, ml, offset=offset)
 
 
-@router.post("/login")
-def select_profile(request: Request, user_id: Annotated[str, Form(min_length=1, max_length=200)],
-                   csrf: Annotated[str, Form()], ml: MLClient = Depends(get_ml_client)):
-    if not valid_csrf(request, csrf):
-        return login_page(request, ml, error="Форма устарела. Выберите профиль ещё раз.", status=403)
-    try:
-        details = ml.profile(user_id)
-    except ProfileNotFound:
-        return login_page(request, ml, error="Этот профиль больше не доступен. Выберите другой.", status=404)
-    except MLUnavailable as exc:
-        return login_page(request, ml, error=str(exc), status=503)
-    response = RedirectResponse("/", status_code=303)
-    remember_profile(response, details.user_id)
-    response.headers["Cache-Control"] = "no-store"
-    return response
+@router.get("/login", include_in_schema=False)
+def legacy_login():
+    return RedirectResponse("/profiles", status_code=303)
 
 
 @router.get("/")
-def home(request: Request, offset: int = Query(0, ge=0), ml: MLClient = Depends(get_ml_client)):
-    user_id = current_user_id(request)
+def home(request: Request, user_id: str | None = Query(None, min_length=1, max_length=200),
+         offset: int = Query(0, ge=0), ml: MLClient = Depends(get_ml_client)):
     if user_id is None:
-        return RedirectResponse("/login", status_code=303)
+        try:
+            available = ml.profiles(limit=1)
+        except (MLUnavailable, ProfileNotFound):
+            return profiles_page(request, ml)
+        if not available.items:
+            return profiles_page(request, ml)
+        user_id = available.items[0].user_id
     try:
         details = ml.profile(user_id)
     except ProfileNotFound:
-        response = RedirectResponse("/login", status_code=303)
-        clear_session(response)
-        return response
+        return profiles_page(request, ml, error="Профиль не найден. Выберите другую компанию.", status=404)
     except MLUnavailable:
         details = None
-    token = csrf_token(request)
     feed, job, error = feed_state(ml, user_id, offset) if details else (None, None, None)
-    response = page(request, "demo_home.html", {"details": details, "user_id": user_id,
-                    "csrf": token, **feed_context(feed, job, error, offset)}, status=200 if details else 503)
-    set_csrf_cookie(response, token)
-    return response
-
-
-
-@router.post("/logout")
-def logout(request: Request, csrf: Annotated[str, Form()]):
-    if not valid_csrf(request, csrf):
-        return page(request, "demo_error.html", {"message": "Форма устарела. Обновите страницу и повторите выход."}, 403)
-    response = RedirectResponse("/login", status_code=303)
-    clear_session(response)
-    response.headers["Cache-Control"] = "no-store"
-    return response
+    return page(request, "demo_home.html", {"details": details, "user_id": user_id,
+                **feed_context(feed, job, error, offset)}, status=200 if details else 503)
 
 
 @router.get("/insights")
 @router.get("/insights/prototype")
-def insights(request: Request):
-    return RedirectResponse("/" if current_user_id(request) else "/login", status_code=303)
+def insights(user_id: str | None = Query(None, min_length=1, max_length=200)):
+    return RedirectResponse("/?user_id=" + quote(user_id, safe="") if user_id else "/", status_code=303)
 
 
 @router.post("/api/insights/generate")
-def generate_insights(request: Request, csrf: Annotated[str, Form()], ml: MLClient = Depends(get_ml_client)):
-    user_id = current_user_id(request)
-    if user_id is None:
-        return json_response({"detail": "Нужен вход"}, 401)
-    if not valid_csrf(request, csrf):
-        return json_response({"detail": "Форма устарела. Обновите страницу."}, 403)
+def generate_insights(user_id: str = Query(..., min_length=1, max_length=200), ml: MLClient = Depends(get_ml_client)):
     try:
         job = ml.generate_insights(user_id)
         return json_response({"user_id": user_id, "job": job.model_dump(mode="json")}, 202)
@@ -175,12 +137,10 @@ def generate_insights(request: Request, csrf: Annotated[str, Form()], ml: MLClie
 
 
 @router.get("/api/insights")
-def get_insights(request: Request, offset: int = Query(0, ge=0), ml: MLClient = Depends(get_ml_client)):
-    user_id = current_user_id(request)
-    if user_id is None:
-        return json_response({"detail": "Нужен вход"}, 401)
+def get_insights(request: Request, user_id: str = Query(..., min_length=1, max_length=200),
+                 offset: int = Query(0, ge=0), ml: MLClient = Depends(get_ml_client)):
     feed, job, error = feed_state(ml, user_id, offset)
-    context = feed_context(feed, job, error, offset)
+    context = {"user_id": user_id, **feed_context(feed, job, error, offset)}
     html = templates.env.get_template("insights_live_feed.html").render(**context)
     return json_response({"user_id": user_id, "html": html,
         "poll": bool(job and job.status in ("queued", "running")), "error": error}, 200 if feed else 503)
@@ -205,24 +165,17 @@ def card_state(ml, user_id, news_id):
 
 
 @router.get("/insights/{news_id}")
-def insight_page(request: Request, news_id: str, ml: MLClient = Depends(get_ml_client)):
-    user_id = current_user_id(request)
-    if user_id is None:
-        return RedirectResponse("/login", status_code=303)
+def insight_page(request: Request, news_id: str, user_id: str = Query(..., min_length=1, max_length=200),
+                 ml: MLClient = Depends(get_ml_client)):
     card, state, message = card_state(ml, user_id, news_id)
-    token = csrf_token(request)
-    response = page(request, "insights_live_page.html", {"user_id": user_id, "card": card,
-                    "card_state": state, "message": message, "news_id": news_id, "csrf": token},
+    return page(request, "insights_live_page.html", {"user_id": user_id, "card": card,
+                    "card_state": state, "message": message, "news_id": news_id},
                     status=503 if state == "error" else 200)
-    set_csrf_cookie(response, token)
-    return response
 
 
 @router.get("/api/insights/{news_id}")
-def get_insight(request: Request, news_id: str, ml: MLClient = Depends(get_ml_client)):
-    user_id = current_user_id(request)
-    if user_id is None:
-        return json_response({"detail": "Нужен вход"}, 401)
+def get_insight(request: Request, news_id: str, user_id: str = Query(..., min_length=1, max_length=200),
+                ml: MLClient = Depends(get_ml_client)):
     card, state, message = card_state(ml, user_id, news_id)
     html = templates.env.get_template("insights_live_card.html").render(card=card, card_state=state, message=message)
     return json_response({"user_id": user_id, "html": html, "poll": state == "pending"}, 503 if state == "error" else 200)

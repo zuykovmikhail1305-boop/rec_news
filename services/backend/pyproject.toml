@@ -1,7 +1,7 @@
 [project]
 name = "rec-news-backend"
 version = "0.2.0"
-description = "Demo web sign-in and ML profile overview"
+description = "Demo company profiles and ML insights"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -9,6 +9,4 @@ dependencies = [
     "uvicorn==0.30.6",
     "httpx==0.28.1",
     "jinja2==3.1.4",
-    "itsdangerous==2.2.0",
-    "python-multipart>=0.0.18",
 ]

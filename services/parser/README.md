@@ -36,16 +36,75 @@ ML/LLM не используется. Адаптеры: Банк России, �
 перенесён без изменения алгоритма в `parser_app/extraction.py`. Его теперь используют
 как старый `app/tass_parser.py`, так и новые адаптеры ТАСС/Интерфакса.
 
-## Запуск из корня репозитория (PowerShell, Python 3.11+)
+## Запуск через uv (рекомендуется, PowerShell)
+
+Корень проекта uv — `services/parser`, пакет с кодом — `parser_app`.
+Выполняйте команды из корня сервиса:
+
+```powershell
+cd D:/repos/rec_news/services/parser
+uv sync --locked
+uv run scripts/init_db.py
+uv run scripts/run_api.py
+```
+
+Во втором терминале из `services/parser`:
+
+```powershell
+uv run scripts/run_worker.py
+```
+
+Проверки:
+
+```powershell
+uv run scripts/init_db.py --check
+uv run python -m unittest discover -s tests -v
+```
+
+`pyproject.toml` описывает зависимости, `uv.lock` фиксирует их версии,
+`.python-version` выбирает Python 3.12. `uv sync` создаёт окружение автоматически.
+Вложенное окружение `parser_app/.venv`, если оно осталось после прежних попыток,
+при таком запуске не используется. Модули пакета отдельно как файлы не запускайте.
+
+## Запуск через venv и pip (PowerShell, Python 3.11+)
 
 ```powershell
 cd services/parser
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
-.venv/Scripts/python -m uvicorn parser_app.main:app --host 127.0.0.1 --port 8001 --workers 1
+.venv/Scripts/python scripts/init_db.py
+.venv/Scripts/python scripts/run_api.py
 ```
 
 Swagger: http://127.0.0.1:8001/docs. На Linux используйте `.venv/bin/python`.
+
+Скрипты можно вызывать из любого рабочего каталога, указав путь к скрипту.
+Окружение и зависимости устанавливаются один раз; при следующих запусках
+достаточно `scripts/run_api.py` и, для очереди, `scripts/run_worker.py` во втором терминале.
+API и воркер сами создают отсутствующие таблицы.
+
+`scripts/init_db.py` создаёт недостающие таблицы и проверяет наличие колонок;
+повторный запуск сохраняет существующие записи. Он не загружает тестовые новости,
+не скачивает модели и не мигрирует старые схемы. Проверка без записи:
+
+```powershell
+.venv/Scripts/python scripts/init_db.py --check
+```
+
+Настройки передаются через переменные окружения (файл `.env` автоматически не читается):
+
+- `PARSER_API_HOST` — адрес API, по умолчанию `127.0.0.1`.
+- `PARSER_API_PORT` — порт API, по умолчанию `8001`.
+- `PARSER_DATABASE_URL` — URL БД, один и тот же для API, инициализации и воркера;
+  по умолчанию SQLite `parser_app/parser.db`, независимо от рабочего каталога.
+  Для другой SQLite-базы используйте абсолютный путь и заранее создайте родительский каталог.
+
+Аргументы `--host` и `--port` имеют приоритет над переменными окружения:
+
+```powershell
+.venv/Scripts/python scripts/run_api.py --port 8001
+```
+
 
 ```powershell
 $body = @{url='https://www.cbr.ru/press/event/?id=32923'} | ConvertTo-Json
@@ -142,13 +201,13 @@ HTTP-отказы, запрещённые редиректы, а также об
 Во втором терминале из `services/parser`, с той же настройкой БД, что у API:
 
 ```powershell
-.venv/Scripts/python -m parser_app.worker
+.venv/Scripts/python scripts/run_worker.py
 ```
 
 Воркер опрашивает БД раз в 2 секунды. Для одного прохода по доступным задачам:
 
 ```powershell
-.venv/Scripts/python -m parser_app.worker --once --limit 20
+.venv/Scripts/python scripts/run_worker.py --once --limit 20
 ```
 
 `--once` не ждёт будущих повторов или освобождения лимита источника. Если задача

@@ -1,0 +1,14 @@
+[project]
+name = "rec-news-parser"
+version = "0.1.0"
+description = "Publication collection API and durable parsing queue"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.115.0",
+    "httpx==0.28.1",
+    "selectolax==0.3.34",
+    "sqlalchemy==2.0.35",
+    "trafilatura==2.0.0",
+    "uvicorn==0.30.6",
+]

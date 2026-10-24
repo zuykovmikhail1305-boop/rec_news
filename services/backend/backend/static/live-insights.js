@@ -16,9 +16,10 @@
     requests.add(controller);
     const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store',
+      const target = new URL(url, window.location.origin);
+      target.searchParams.set('user_id', expectedUser);
+      const response = await fetch(target, {credentials: 'omit', cache: 'no-store',
         ...options, signal: controller.signal});
-      if (response.status === 401) { window.location.assign('/login'); return null; }
       const data = await response.json();
       if (!active) return null;
       if (data.user_id && data.user_id !== expectedUser) { window.location.reload(); return null; }
@@ -53,8 +54,7 @@
     if (retryButton) retryButton.disabled = true;
     show('Проверяем готовность инсайтов…');
     try {
-      const body = new URLSearchParams({csrf: root.dataset.csrf});
-      const result = await request('/api/insights/generate', {method: 'POST', body});
+      const result = await request('/api/insights/generate', {method: 'POST'});
       if (!result) return;
       if (!result.response.ok) show(result.data.detail || 'Не удалось запустить подготовку.');
       else show('');

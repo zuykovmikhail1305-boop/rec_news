@@ -13,7 +13,7 @@ from parser_app.publications import parse_publication
 from test_collection import HTML, URL
 
 TASS_URL = "https://tass.ru/ekonomika/999000001"
-TASS_HTML = (Path(__file__).resolve().parents[3] / "tests/fixtures/tass_article.html").read_text(encoding="utf-8")
+TASS_HTML = (Path(__file__).resolve().parent / "fixtures/tass_article.html").read_text(encoding="utf-8")
 
 
 class ParseTests(unittest.TestCase):

@@ -3,15 +3,15 @@
 {% block body %}
 <div class="app">
 <aside class="side"><div class="brand"><div class="brand-mark">А</div><div>Бизнес Онлайн<small>демонстрационный сервис</small></div></div>
-<nav class="nav"><a class="active" href="/" aria-current="page">Инсайты</a><a href="#company">Профиль компании</a><a href="/login?switch=true">Сменить профиль</a></nav>
+<nav class="nav"><a class="active" href="/?user_id={{ user_id|urlencode }}" aria-current="page">Инсайты</a><a href="#company">Профиль компании</a><a href="/profiles">Сменить профиль</a></nav>
 <div class="side-foot">Демонстрационные профили компаний.</div></aside>
 <div class="main"><header class="top"><div class="demo-current"><b>{{ details.profile.company_name if details else 'Профиль компании' }}</b><span>{{ details.profile.role if details else user_id }}</span></div>
-<div class="top-right"><span class="proto-pill">Демо</span><a class="demo-switch" href="/login?switch=true">Сменить профиль</a>
-<form action="/logout" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-ghost btn-sm" type="submit">Выйти</button></form></div></header>
+<div class="top-right"><span class="proto-pill">Демо</span><a class="demo-switch" href="/profiles">Сменить профиль</a>
+</div></header>
 <main class="content">
 {% if details %}
 <div class="demo-eyebrow">Профиль {{ details.user_id }}</div><h1 class="page-title">Инсайты для вашей компании</h1><p class="page-sub">{{ details.profile.company_name or 'Компания' }} · {{ details.profile.role }}</p>
-<section class="live-insights" data-insights-root data-user-id="{{ user_id }}" data-offset="{{ offset }}" data-csrf="{{ csrf }}">
+<section class="live-insights" data-insights-root data-user-id="{{ user_id }}" data-offset="{{ offset }}">
 <div class="insights-live-heading"><div><h2>События и их влияние на бизнес</h2><p>Готовые карточки появляются по мере подготовки.</p></div><button type="button" class="btn btn-secondary btn-sm" data-retry-insights>Обновить</button></div>
 <p class="live-message" data-insights-message role="status" aria-live="polite"></p>
 <div data-insights-feed>{% include "insights_live_feed.html" %}</div>
@@ -34,7 +34,7 @@
 </section></div>
 {% if details.interests.get('aspects') %}<section class="card demo-topics"><h2>Что важно для компании</h2><ul class="demo-facts">{% for aspect in details.interests.aspects %}<li><b>{{ aspect.get('title', '') }}</b>{% if aspect.get('description') %}<p>{{ aspect.description }}</p>{% endif %}</li>{% endfor %}</ul></section>{% endif %}
 </details>
-{% else %}<div class="empty-state card" role="alert"><h1>Данные временно недоступны</h1><p>Не удалось получить профиль компании. Ваш выбор сохранён.</p><a class="btn btn-primary" href="/">Попробовать ещё раз</a></div>{% endif %}
+{% else %}<div class="empty-state card" role="alert"><h1>Данные временно недоступны</h1><p>Не удалось получить профиль компании. Попробуйте ещё раз или выберите другую компанию.</p><a class="btn btn-primary" href="/?user_id={{ user_id|urlencode }}">Попробовать ещё раз</a></div>{% endif %}
 </main></div></div>{% endblock %}
 
 {% block scripts %}{% if details %}<script src="/static/live-insights.js" defer></script>{% endif %}{% endblock %}
