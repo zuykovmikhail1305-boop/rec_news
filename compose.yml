@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres
+    secrets:
+      - db_password
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    volumes:
+      - db-volume:/var/lib/postgresql
+    ports:
+      - 5432
+  # nginx:
+  #   build: ./services/nginx
+  #   ports:
+  #     # - 80:80
+  #     - 443:443
+  #   secrets:
+  #     - ssl_cert
+  #     - ssl_key
+  backend:
+    build: ./services/web
+    ports:
+      - 8000:8000
+  parser:
+    build: ./services/parser
+    # expose:
+    #   - 8001
+    ports:
+      - 8001:8001
+secrets:
+  db_password:
+    file: ./.secrets/db_password
+  # ssl_cert:
+  #   file: ./secrets/fullchain.pem
+  # ssl_key:
+  #   file: ./secrets/privkey.pem
+volumes:
+  db-volume:
