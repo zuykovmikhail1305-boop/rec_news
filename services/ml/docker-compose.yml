@@ -1,0 +1,47 @@
+# Инфраструктура ML-сервиса: Qdrant, брокер и Postgres (docs/broker.md):
+#
+#   docker compose up -d qdrant   # только Qdrant :6333 (векторы; REC_NEWS_QDRANT_URL=http://localhost:6333)
+#   docker compose up -d          # всё: Postgres :5432, RabbitMQ :5672 (панель :15672), Qdrant :6333
+#
+# В .env:  REC_NEWS_DATABASE_URL, REC_NEWS_QUEUE=celery, REC_NEWS_BROKER_URL, REC_NEWS_QDRANT_URL —
+# значения для этих контейнеров есть в .env.example. Qdrant-сервер нужен потому, что с векторами
+# работают несколько процессов (API и воркеры Celery), а локальную базу Qdrant открывает только один.
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: rec_news
+      POSTGRES_PASSWORD: rec_news
+      POSTGRES_DB: rec_news
+    ports: ["${REC_NEWS_PG_PORT:-5432}:5432"]   # занят локальным PostgreSQL — REC_NEWS_PG_PORT=15432
+    volumes: [postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rec_news -d rec_news"]
+      interval: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    ports: ["5672:5672", "15672:15672"]
+    volumes: [rabbitmq:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 10
+
+  qdrant:
+    # Версия сервера — под клиент qdrant-client 1.19 (uv.lock): минорные версии должны отличаться не больше чем на 1.
+    image: qdrant/qdrant:v1.19.2
+    ports: ["6333:6333"]          # REST; панель — http://localhost:6333/dashboard
+    volumes: [qdrant:/qdrant/storage]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  postgres:
+  rabbitmq:
+  qdrant:

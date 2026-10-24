@@ -25,6 +25,7 @@ from news_pipeline.agent.style import TONE_PROMPT_SHORT
 from news_pipeline.insights.blocks import SPECS, blocks_text
 from news_pipeline.insights.context import CardContext
 from news_pipeline.llm.client import LLM, LLMError, LLMUnavailable
+from news_pipeline.prompts import prompt
 from news_pipeline.settings import SETTINGS
 
 CRITERIA = {
@@ -40,25 +41,7 @@ CRITERIA = {
     "bank_offer": "продукт помогает именно с названным риском, предложение к месту",
 }
 
-_PROMPT = """Ты проверщик карточек инсайтов Альфа-Банка. Карточка объясняет руководителю, что новость \
-значит для его компании. Её блоки написали разные агенты. Проверь, насколько верно каждый блок построен \
-по публикациям, аналитике Альфа-Банка и данным о компании.
-
-Критерии по блокам:
-{criteria}
-
-Для каждого блока из карточки верни элемент blocks: block — имя блока; ok — блок построен верно; \
-severity — "error", если блок вводит в заблуждение, противоречит источникам или другим блокам, \
-выдумывает факты или нарушает критерий; "warning" — мелочь, которую можно оставить; problem — что не так \
-(пусто, если ok); fix — что конкретно исправить агенту блока.
-Не придирайся к стилю, если смысл верный. Не требуй фактов, которых нет в источниках.
-Прежде чем написать, что факта, числа или даты нет в источниках, найди их в текстах публикаций и аналитики: \
-если они там есть — это не ошибка. Публикация может сама упоминать прошлые события (например, решение ЦБ) — \
-их можно приводить в факте.
-{tone}
-comment — общий вывод о карточке, одно предложение.
-Ответ — JSON.
-/no_think"""
+_PROMPT = prompt("insight_card.verifier")
 
 _SCHEMA = {
     "type": "object",

@@ -1,15 +1,15 @@
-"""SQLite-хранилище новостей на SQLAlchemy. Описание всех колонок — ``docs/news_db.md``.
+"""Хранилище новостей на SQLAlchemy ORM. Описание всех колонок — ``docs/news_db.md``.
 
-Таблицы (объекты :class:`sqlalchemy.Table` ниже):
+ORM-модели (базы — файлы SQLite или схемы PostgreSQL, см. ``storage/db.py``):
 
-* ``news`` — входящие новости в ``news.db``;
-* ``news_summary`` — подготовленные новости в ``new_summary.db`` и уникальные
-  новости после дедупликации в ``unique.db``;
-* ``news_sources`` — источники уникальной новости: она сама и её дубли
+* :class:`News` (``news``) — входящие новости в ``news.db``;
+* :class:`NewsSummary` (``news_summary``) — подготовленные новости в ``new_summary.db`` и уникальные
+  новости после дедупликации в ``unique.db`` (одна модель — в какой базе строка, решает сессия);
+* :class:`NewsSource` (``news_sources``) — источники уникальной новости: она сама и её дубли
   (по строке на источник, ``unique.db``);
-* ``news_fingerprint`` — отпечатки уникальных новостей для дешёвых шагов
-  дедупликации (``unique.db``): SHA-1 нормализованного текста, ключ URL
-  (оба с индексом) и MinHash (см. ``fingerprints.py``).
+* :class:`NewsFingerprint` (``news_fingerprint``) — отпечатки уникальных новостей для дешёвых шагов
+  дедупликации (``unique.db``): SHA-1 нормализованного текста, ключ URL (оба с индексом) и MinHash
+  (см. ``fingerprints.py``).
 
 У каждого поля метаданных — своя колонка. В коде метаданные по-прежнему
 словарь ``metadata`` той же формы, что и раньше (``title``, ``source``,
@@ -23,14 +23,12 @@
 * ``new`` — ждёт обработки;
 * ``processing`` — взята в работу (:func:`claim_news`, :func:`claim_summaries`);
 * ``ready`` — обработана: подготовка записала её в ``new_summary.db``,
-  дедупликация — в ``unique.db``. В ``unique.db`` у всех записей ``ready``.
+  дедупликация — в ``unique.db``. В ``unique.db`` у всех записей ``ready``;
+* ``failed`` — только ``news``: не обработана после всех повторов (задача ``analytics.analyze``).
 
 Новости после обработки не удаляются — меняется только статус. Запись,
 зависшая в ``processing`` дольше ``STALE_MINUTES`` (процесс упал), снова
 получает ``new`` (:func:`release_stale`).
-
-Базы прежнего формата (одна JSON-колонка ``metadata``) и базы без статуса
-переводятся в новый формат автоматически при первом открытии.
 """
 
 from __future__ import annotations
@@ -41,15 +39,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from sqlalchemy import (
-    Column, Connection, Engine, Float, Index, Integer, LargeBinary, MetaData, Table, Text, delete, func, inspect,
-    or_, select, update,
-)
+from sqlalchemy import Engine, Float, Index, Integer, LargeBinary, Text, delete, func, insert, or_, select, update
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from news_pipeline.storage import db
 
-NEW, PROCESSING, READY = "new", "processing", "ready"
-STATUSES = (NEW, PROCESSING, READY)
+# failed — новость не удалось обработать после всех повторов (задача analytics.analyze); заново в работу
+# её возвращает новая команда AnalyzeNews или смена статуса на new.
+NEW, PROCESSING, READY, FAILED = "new", "processing", "ready", "failed"
+STATUSES = (NEW, PROCESSING, READY, FAILED)
 STALE_MINUTES = 30
 
 # --- раскладка метаданных по колонкам ------------------------------------------
@@ -66,7 +64,6 @@ _ENRICHMENT = {"entities": "entities", "topics": "topics", "importance": "import
 # metadata["test"] (эталонная разметка синтетики) → колонки test_*.
 _TEST = ("relation", "related_to", "event_key", "topic", "importance", "genre", "event_type")
 _JSON_COLUMNS = {"entities", "topics", "numbers", "extra"}
-_INTEGER_COLUMNS = {"importance", "test_importance"}
 
 
 def _meta_columns(table: str) -> list[str]:
@@ -76,62 +73,114 @@ def _meta_columns(table: str) -> list[str]:
     return columns + [f"test_{key}" for key in _TEST] + ["extra"]
 
 
-# --- схема ---------------------------------------------------------------------
-
-metadata = MetaData()
+# --- модели --------------------------------------------------------------------
 
 
-def _table(name: str, base: list[Column], indexed: tuple[str, ...]) -> Table:
-    """Таблица новостей: базовые колонки, колонка на каждое поле метаданных, статус."""
-    names = {column.name for column in base}
-    meta = [Column(column, Integer if column in _INTEGER_COLUMNS else Text)
-            for column in _meta_columns(name) if column not in names]
-    status = [Column("status", Text, nullable=False, server_default=NEW), Column("status_updated_at", Text)]
-    table = Table(name, metadata, *base, *meta, *status)
-    for column in indexed:
-        Index(f"{name}_{column}", table.c[column])
-    return table
+class _SourceColumns:
+    """Поля метаданных, общие для входящей и подготовленной новости."""
+
+    url: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str | None] = mapped_column(Text)
+    rubric: Mapped[str | None] = mapped_column(Text)
+    publication_time: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[str | None] = mapped_column(Text)
 
 
-NEWS = _table("news", [
-    Column("document_id", Text, primary_key=True),
-    Column("text", Text, nullable=False),
-    Column("title", Text),
-], indexed=("publication_time", "status"))
+class _TestColumns:
+    """Эталонная разметка синтетических новостей (metadata["test"])."""
 
-NEWS_SUMMARY = _table("news_summary", [
-    Column("document_id", Text, primary_key=True),
-    Column("text", Text, nullable=False),
-    Column("title", Text, nullable=False),
-    Column("first_paragraph", Text, nullable=False),
-    Column("audience_text", Text, nullable=False, server_default=""),
-], indexed=("publication_time", "source", "event_id", "status"))
+    test_relation: Mapped[str | None] = mapped_column(Text)
+    test_related_to: Mapped[str | None] = mapped_column(Text)
+    test_event_key: Mapped[str | None] = mapped_column(Text)
+    test_topic: Mapped[str | None] = mapped_column(Text)
+    test_importance: Mapped[int | None] = mapped_column(Integer)
+    test_genre: Mapped[str | None] = mapped_column(Text)
+    test_event_type: Mapped[str | None] = mapped_column(Text)
 
-NEWS_SOURCES = Table(
-    "news_sources", metadata,
-    Column("document_id", Text, primary_key=True),
-    Column("position", Integer, nullable=False),
-    Column("source_document_id", Text, primary_key=True),
-    Column("url", Text),
-    Column("source", Text),
-    Column("publication_time", Text),
-    Column("method", Text, nullable=False),
-    Column("score", Float),
-    Column("via", Text),
-    Index("news_sources_source_document_id", "source_document_id"),
-)
 
-NEWS_FINGERPRINT = Table(
-    "news_fingerprint", metadata,
-    Column("document_id", Text, primary_key=True),
-    Column("text_hash", Text, nullable=False),
-    Column("url_key", Text),
-    Column("minhash", LargeBinary, nullable=False),
-    Index("news_fingerprint_text_hash", "text_hash"),
-    Index("news_fingerprint_url_key", "url_key"),
-)
+class _StatusColumns:
+    """Прочие поля метаданных (JSON) и статус обработки."""
 
-_TABLES = {"news": NEWS, "news_summary": NEWS_SUMMARY}
+    extra: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, server_default=NEW, default=NEW)
+    status_updated_at: Mapped[str | None] = mapped_column(Text)
+
+
+class News(_SourceColumns, _TestColumns, _StatusColumns, db.Base):
+    """Входящая новость (``news.db``)."""
+
+    __tablename__ = "news"
+    __table_args__ = (Index("news_publication_time", "publication_time"), Index("news_status", "status"))
+
+    document_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    text: Mapped[str] = mapped_column(Text)
+    title: Mapped[str | None] = mapped_column(Text)
+
+
+class NewsSummary(_SourceColumns, _TestColumns, _StatusColumns, db.Base):
+    """Подготовленная (``new_summary.db``) или уникальная (``unique.db``) новость."""
+
+    __tablename__ = "news_summary"
+    __table_args__ = tuple(Index(f"news_summary_{column}", column)
+                           for column in ("publication_time", "source", "event_id", "status"))
+
+    document_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    text: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    first_paragraph: Mapped[str] = mapped_column(Text)
+    audience_text: Mapped[str] = mapped_column(Text, server_default="", default="")
+    lead: Mapped[str | None] = mapped_column(Text)
+    prepared_at: Mapped[str | None] = mapped_column(Text)
+    deduplicated_at: Mapped[str | None] = mapped_column(Text)
+    event_id: Mapped[str | None] = mapped_column(Text)
+    parent_event_id: Mapped[str | None] = mapped_column(Text)
+    entities: Mapped[str | None] = mapped_column(Text)
+    topics: Mapped[str | None] = mapped_column(Text)
+    importance: Mapped[int | None] = mapped_column(Integer)
+    event_type: Mapped[str | None] = mapped_column(Text)
+    numbers: Mapped[str | None] = mapped_column(Text)
+    enrichment_source: Mapped[str | None] = mapped_column(Text)
+
+
+class NewsSource(db.Base):
+    """Источник уникальной новости: она сама или её дубль (``unique.db``)."""
+
+    __tablename__ = "news_sources"
+    __table_args__ = (Index("news_sources_source_document_id", "source_document_id"),)
+
+    document_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    position: Mapped[int] = mapped_column(Integer)
+    source_document_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    url: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str | None] = mapped_column(Text)
+    publication_time: Mapped[str | None] = mapped_column(Text)
+    method: Mapped[str] = mapped_column(Text)
+    score: Mapped[float | None] = mapped_column(Float)
+    via: Mapped[str | None] = mapped_column(Text)
+
+    def entry(self) -> dict[str, Any]:
+        entry = {"document_id": self.source_document_id, "url": self.url, "source": self.source,
+                 "publication_time": self.publication_time, "method": self.method}
+        if self.score is not None:
+            entry["score"] = self.score
+        if self.via is not None:
+            entry["via"] = self.via
+        return entry
+
+
+class NewsFingerprint(db.Base):
+    """Отпечатки уникальной новости (``unique.db``)."""
+
+    __tablename__ = "news_fingerprint"
+    __table_args__ = (Index("news_fingerprint_text_hash", "text_hash"), Index("news_fingerprint_url_key", "url_key"))
+
+    document_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    text_hash: Mapped[str] = mapped_column(Text)
+    url_key: Mapped[str | None] = mapped_column(Text)
+    minhash: Mapped[bytes] = mapped_column(LargeBinary)
+
+
+_MODELS = {"news": News, "news_summary": NewsSummary}
 
 
 def _flatten(meta_in: dict[str, Any], table: str) -> dict[str, Any]:
@@ -189,22 +238,31 @@ def _unflatten(row: dict[str, Any], table: str) -> dict[str, Any]:
     return meta
 
 
-def _ensure(path: str | Path, table: Table, extra: list[Table], key: str) -> Engine:
-    """Создаёт таблицы базы; таблицу прежнего формата (JSON-колонка ``metadata``) переводит в новый."""
+def _ensure(path: str | Path, model: type[db.Base], extra: list[type[db.Base]], key: str) -> Engine:
+    """Создаёт таблицы базы (модель и дополнительные)."""
     bind = db.engine(path)
     if db.is_ensured(bind, key):
         return bind
-    for other in extra:
-        db.ensure_tables(bind, [other])
-    existing = db.columns(bind, table.name)
-    if existing and "metadata" in existing and (table is NEWS or "first_paragraph" in existing):
-        _migrate(bind, table)
-    elif existing and "extra" not in existing:
-        raise RuntimeError(f"В {path} таблица {table.name} неизвестного формата {existing}. "
-                           "Удалите файл, он будет создан заново.")
-    db.ensure_tables(bind, [table, *extra])
+    existing = db.columns(bind, model.__tablename__)
+    if existing and "extra" not in existing:
+        raise RuntimeError(f"В {db.location(path)} таблица {model.__tablename__} прежнего формата {existing}. "
+                           "Удалите базу, она будет создана заново.")
+    db.ensure_tables(bind, [model, *extra])
     db.mark_ensured(bind, key)
     return bind
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _execute_counting(session: Session, statement, rows: list[dict[str, Any]]) -> int:
+    """ORM-вставка пачкой; возвращает число вставленных строк (без пропущенных ``ON CONFLICT DO NOTHING``)."""
+    if not rows:
+        return 0
+    before = db.changes(session)
+    session.execute(statement, rows)
+    return db.changes(session) - before
 
 
 # --- входящие новости (news.db) -------------------------------------------------
@@ -218,23 +276,18 @@ class StoredNews:
     text: str
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def from_row(cls, row: News) -> "StoredNews":
+        return cls(row.document_id, row.text, _unflatten(db.as_dict(row), "news"))
+
 
 def ensure_schema(database_path: str | Path) -> None:
-    """Создаёт таблицу ``news``; базу прежнего формата (JSON-колонка ``metadata``) переводит в новый."""
-    _ensure(database_path, NEWS, [], "news")
+    """Создаёт таблицу ``news``."""
+    _ensure(database_path, News, [], "news")
 
 
 def _news_row(item: StoredNews) -> dict[str, Any]:
     return {**_flatten(item.metadata, "news"), "document_id": item.document_id, "text": item.text}
-
-
-def _insert(connection: Connection, statement, rows: list[dict[str, Any]]) -> int:
-    """Вставка пачкой; возвращает число вставленных строк."""
-    if not rows:
-        return 0
-    before = db.changes(connection)
-    connection.execute(statement, rows)
-    return db.changes(connection) - before
 
 
 def insert_news(
@@ -249,65 +302,73 @@ def insert_news(
     пропускаются, иначе поднимается ``sqlalchemy.exc.IntegrityError``.
     """
     ensure_schema(database_path)
-    statement = db.insert_ignore(NEWS) if ignore_existing else NEWS.insert()
-    with db.engine(database_path).begin() as connection:
-        return _insert(connection, statement, [_news_row(item) for item in items])
+    statement = db.insert_ignore(News) if ignore_existing else insert(News)
+    with db.session(database_path) as session:
+        return _execute_counting(session, statement, [_news_row(item) for item in items])
 
 
-def _status_clause(table: Table, statuses: Iterable[str] | None):
-    return table.c.status.in_(tuple(statuses)) if statuses is not None else None
+def _status_clause(model: type[News] | type[NewsSummary], statuses: Iterable[str] | None):
+    return model.status.in_(tuple(statuses)) if statuses is not None else None
 
 
 def read_news(database_path: str | Path, statuses: Iterable[str] | None = None) -> list[StoredNews]:
     """Читает новости из базы: все или только с заданными статусами."""
     ensure_schema(database_path)
-    query = select(NEWS)
-    if (clause := _status_clause(NEWS, statuses)) is not None:
+    query = select(News)
+    if (clause := _status_clause(News, statuses)) is not None:
         query = query.where(clause)
-    with db.engine(database_path).connect() as connection:
-        rows = [db.row_dict(row) for row in connection.execute(query)]
-    return [StoredNews(row["document_id"], row["text"], _unflatten(row, "news")) for row in rows]
+    with db.session(database_path) as session:
+        return [StoredNews.from_row(row) for row in session.scalars(query)]
 
 
 def read_ids(database_path: str | Path, statuses: Iterable[str] | None = None) -> set[str]:
-    """``document_id`` новостей базы (все или с заданными статусами); пустое множество, если файла нет."""
-    if not Path(database_path).exists():
+    """``document_id`` новостей базы (все или с заданными статусами); пустое множество, если базы нет."""
+    if not db.exists(database_path):
         return set()
     ensure_schema(database_path)
-    return _ids(database_path, NEWS, statuses)
+    return _ids(database_path, News, statuses)
 
 
-def _ids(database_path: str | Path, table: Table, statuses: Iterable[str] | None) -> set[str]:
-    query = select(table.c.document_id)
-    if (clause := _status_clause(table, statuses)) is not None:
+def _ids(database_path: str | Path, model: type[News] | type[NewsSummary], statuses: Iterable[str] | None) -> set[str]:
+    query = select(model.document_id)
+    if (clause := _status_clause(model, statuses)) is not None:
         query = query.where(clause)
-    with db.engine(database_path).connect() as connection:
-        return set(connection.scalars(query))
+    with db.session(database_path) as session:
+        return set(session.scalars(query))
 
 
-def claim_news(database_path: str | Path) -> list[StoredNews]:
-    """Берёт в работу все новости со статусом ``new``: ставит им ``processing`` и возвращает их."""
+def claim_news(database_path: str | Path, document_ids: Iterable[str] | None = None) -> list[StoredNews]:
+    """Берёт в работу новости со статусом ``new`` (все или только ``document_ids``): ставит им
+    ``processing`` и возвращает их."""
     ensure_schema(database_path)
-    ids = _claim(database_path, NEWS)
+    ids = _claim(database_path, News, document_ids)
     return [item for item in read_news(database_path, (PROCESSING,)) if item.document_id in ids]
+
+
+def news_status(database_path: str | Path, document_id: str) -> str | None:
+    """Статус новости ``news.db``; ``None`` — такой новости нет."""
+    if not db.exists(database_path):
+        return None
+    ensure_schema(database_path)
+    with db.session(database_path) as session:
+        return session.scalar(select(News.status).where(News.document_id == document_id))
 
 
 def set_news_status(database_path: str | Path, document_ids: Iterable[str], status: str) -> int:
     """Меняет статус новостей ``news.db``; возвращает число изменённых записей."""
-    return _set_status(database_path, NEWS, document_ids, status)
+    return _set_status(database_path, News, document_ids, status)
 
 
 def delete_news(database_path: str | Path, document_ids: Iterable[str]) -> int:
     """Удаляет новости по ``document_id`` и возвращает число удалённых записей."""
-    return _delete(database_path, NEWS, list(document_ids))
+    return _delete(database_path, News, list(document_ids))
 
 
-def _delete(database_path: str | Path, table: Table, ids: list[str]) -> int:
-    with db.engine(database_path).begin() as connection:
-        before = db.changes(connection)
-        for part in db.chunks(ids):
-            connection.execute(delete(table).where(table.c.document_id.in_(part)))
-        return db.changes(connection) - before
+def _delete(database_path: str | Path, model: type[db.Base], ids: list[str]) -> int:
+    with db.session(database_path) as session:
+        return sum(session.execute(delete(model).where(model.document_id.in_(part))
+                                   .execution_options(synchronize_session=False)).rowcount
+                   for part in db.chunks(ids))
 
 
 # --- подготовленные и уникальные новости (new_summary.db, unique.db) -------------
@@ -358,8 +419,8 @@ class ProcessedNews:
 
 
 def ensure_summary_schema(database_path: str | Path) -> None:
-    """Создаёт таблицы ``news_summary`` и ``news_sources``; прежний формат переводит в новый."""
-    _ensure(database_path, NEWS_SUMMARY, [NEWS_SOURCES], "news_summary")
+    """Создаёт таблицы ``news_summary`` и ``news_sources``."""
+    _ensure(database_path, NewsSummary, [NewsSource], "news_summary")
 
 
 def _summary_row(item: ProcessedNews) -> dict[str, Any]:
@@ -377,15 +438,15 @@ def _source_rows(document_id: str, entries: Iterable[dict[str, Any]], start: int
     ]
 
 
-def _write_summaries(connection: Connection, statement, items: list[ProcessedNews], status: str = NEW) -> int:
+def _write_summaries(session: Session, statement, items: list[ProcessedNews], status: str = NEW) -> int:
     now = _now()
-    inserted = _insert(connection, statement,
-                       [{**_summary_row(item), "status": status, "status_updated_at": now} for item in items])
+    inserted = _execute_counting(session, statement,
+                                 [{**_summary_row(item), "status": status, "status_updated_at": now} for item in items])
     for item in items:
         sources = item.metadata.get("sources")
         if sources:
-            connection.execute(delete(NEWS_SOURCES).where(NEWS_SOURCES.c.document_id == item.document_id))
-            _insert(connection, db.insert_ignore(NEWS_SOURCES), _source_rows(item.document_id, sources))
+            session.execute(delete(NewsSource).where(NewsSource.document_id == item.document_id))
+            _execute_counting(session, db.insert_ignore(NewsSource), _source_rows(item.document_id, sources))
     return inserted
 
 
@@ -401,29 +462,22 @@ def insert_summaries(
     ``sqlalchemy.exc.IntegrityError`` и ничего не записывается.
     """
     ensure_summary_schema(database_path)
-    statement = db.upsert(NEWS_SUMMARY) if replace else NEWS_SUMMARY.insert()
-    with db.engine(database_path).begin() as connection:
-        return _write_summaries(connection, statement, list(items))
+    statement = db.upsert(NewsSummary) if replace else insert(NewsSummary)
+    with db.session(database_path) as session:
+        return _write_summaries(session, statement, list(items))
 
 
-def _read_sources(connection: Connection, ids: list[str] | None) -> dict[str, list[dict[str, Any]]]:
-    order = (NEWS_SOURCES.c.document_id, NEWS_SOURCES.c.position)
+def _read_sources(session: Session, ids: list[str] | None) -> dict[str, list[dict[str, Any]]]:
+    order = (NewsSource.document_id, NewsSource.position)
     if ids is None:
-        queries = [select(NEWS_SOURCES).order_by(*order)]
+        queries = [select(NewsSource).order_by(*order)]
     else:
-        queries = [select(NEWS_SOURCES).where(NEWS_SOURCES.c.document_id.in_(part)).order_by(*order)
+        queries = [select(NewsSource).where(NewsSource.document_id.in_(part)).order_by(*order)
                    for part in db.chunks(ids)]
     result: dict[str, list[dict[str, Any]]] = {}
     for query in queries:
-        for row in connection.execute(query):
-            row = db.row_dict(row)
-            entry = {"document_id": row["source_document_id"], "url": row["url"], "source": row["source"],
-                     "publication_time": row["publication_time"], "method": row["method"]}
-            if row["score"] is not None:
-                entry["score"] = row["score"]
-            if row["via"] is not None:
-                entry["via"] = row["via"]
-            result.setdefault(row["document_id"], []).append(entry)
+        for source in session.scalars(query):
+            result.setdefault(source.document_id, []).append(source.entry())
     return result
 
 
@@ -434,136 +488,120 @@ def read_summaries(
     """Читает новости из таблицы ``news_summary``: все или только с заданными ID (в их порядке)."""
     ensure_summary_schema(database_path)
     ids = list(dict.fromkeys(document_ids)) if document_ids is not None else None
-    with db.engine(database_path).connect() as connection:
+    with db.session(database_path) as session:
         if ids is None:
-            rows = [db.row_dict(row) for row in connection.execute(select(NEWS_SUMMARY))]
+            rows = list(session.scalars(select(NewsSummary)))
         else:
             found = {}
             for part in db.chunks(ids):
-                for row in connection.execute(select(NEWS_SUMMARY).where(NEWS_SUMMARY.c.document_id.in_(part))):
-                    found[row.document_id] = db.row_dict(row)
+                for row in session.scalars(select(NewsSummary).where(NewsSummary.document_id.in_(part))):
+                    found[row.document_id] = row
             rows = [found[document_id] for document_id in ids if document_id in found]
-        sources = _read_sources(connection, None if ids is None else [row["document_id"] for row in rows])
+        sources = _read_sources(session, None if ids is None else [row.document_id for row in rows])
     result = []
     for row in rows:
-        meta = {"title": row["title"], **_unflatten(row, "news_summary")}
-        if row["document_id"] in sources:
-            meta["sources"] = sources[row["document_id"]]
-        result.append(ProcessedNews(row["document_id"], row["text"], row["title"], row["first_paragraph"],
-                                    row["audience_text"], meta))
+        meta = {"title": row.title, **_unflatten(db.as_dict(row), "news_summary")}
+        if row.document_id in sources:
+            meta["sources"] = sources[row.document_id]
+        result.append(ProcessedNews(row.document_id, row.text, row.title, row.first_paragraph, row.audience_text, meta))
     return result
 
 
+def event_representative(database_path: str | Path, document_id: str) -> str | None:
+    """Уникальная новость (представитель события) ``unique.db``, к которой дедупликация отнесла
+    ``document_id``: она сама или новость, в источниках которой ``document_id`` записан как дубль."""
+    if not db.exists(database_path):
+        return None
+    ensure_fingerprint_schema(database_path)
+    with db.session(database_path) as session:
+        if session.get(NewsSummary, document_id) is not None:
+            return document_id
+        return session.scalar(select(NewsSource.document_id)
+                              .where(NewsSource.source_document_id == document_id).limit(1))
+
+
 def summary_ids(database_path: str | Path, statuses: Iterable[str] | None = None) -> set[str]:
-    """``document_id`` новостей ``news_summary`` (все или с заданными статусами); пусто, если файла нет."""
-    if not Path(database_path).exists():
+    """``document_id`` новостей ``news_summary`` (все или с заданными статусами); пусто, если базы нет."""
+    if not db.exists(database_path):
         return set()
     ensure_summary_schema(database_path)
-    return _ids(database_path, NEWS_SUMMARY, statuses)
+    return _ids(database_path, NewsSummary, statuses)
 
 
 def claim_summaries(database_path: str | Path) -> list[ProcessedNews]:
     """Берёт в работу подготовленные новости со статусом ``new``: ставит ``processing`` и возвращает их."""
     ensure_summary_schema(database_path)
-    return read_summaries(database_path, sorted(_claim(database_path, NEWS_SUMMARY)))
+    return read_summaries(database_path, sorted(_claim(database_path, NewsSummary)))
 
 
 def set_summary_status(database_path: str | Path, document_ids: Iterable[str], status: str) -> int:
     """Меняет статус записей ``news_summary``; возвращает число изменённых записей."""
-    return _set_status(database_path, NEWS_SUMMARY, document_ids, status)
+    return _set_status(database_path, NewsSummary, document_ids, status)
 
 
 def status_counts(database_path: str | Path, table: str) -> dict[str, int]:
     """Сколько записей таблицы в каждом статусе (``news`` или ``news_summary``)."""
-    if not Path(database_path).exists():
+    if not db.exists(database_path):
         return {status: 0 for status in STATUSES}
     (ensure_schema if table == "news" else ensure_summary_schema)(database_path)
-    target = _TABLES[table]
-    with db.engine(database_path).connect() as connection:
-        counts = dict(connection.execute(select(target.c.status, func.count()).group_by(target.c.status)).all())
+    model = _MODELS[table]
+    with db.session(database_path) as session:
+        counts = dict(session.execute(select(model.status, func.count()).group_by(model.status)).all())
     return {status: counts.get(status, 0) for status in STATUSES}
 
 
 def release_stale(database_path: str | Path, table: str, minutes: int = STALE_MINUTES) -> int:
     """Записи, зависшие в ``processing`` дольше ``minutes``, снова получают ``new``."""
-    if not Path(database_path).exists():
+    if not db.exists(database_path):
         return 0
     (ensure_schema if table == "news" else ensure_summary_schema)(database_path)
-    target = _TABLES[table]
+    model = _MODELS[table]
     border = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat(timespec="seconds")
-    with db.engine(database_path).begin() as connection:
-        before = db.changes(connection)
-        connection.execute(
-            update(target)
-            .where(target.c.status == PROCESSING,
-                   or_(target.c.status_updated_at.is_(None), target.c.status_updated_at < border))
+    with db.session(database_path) as session:
+        return session.execute(
+            update(model)
+            .where(model.status == PROCESSING, or_(model.status_updated_at.is_(None), model.status_updated_at < border))
             .values(status=NEW, status_updated_at=_now())
-        )
-        return db.changes(connection) - before
+            .execution_options(synchronize_session=False)
+        ).rowcount
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+def _claim(database_path: str | Path, model: type[News] | type[NewsSummary],
+           document_ids: Iterable[str] | None = None) -> set[str]:
+    """Атомарно переводит записи ``new`` (все или только ``document_ids``) в ``processing``; возвращает их ID.
 
-
-def _claim(database_path: str | Path, table: Table) -> set[str]:
-    """Атомарно переводит все записи ``new`` в ``processing``; возвращает их ID.
-
-    ``BEGIN IMMEDIATE`` сразу берёт блокировку записи: два процесса не возьмут одну новость.
+    Блокировка записи (:func:`db.write_lock`) берётся сразу: два процесса не возьмут одну новость.
     """
-    with db.engine(database_path).connect() as connection:
-        connection.exec_driver_sql("BEGIN IMMEDIATE")
-        ids = set(connection.scalars(select(table.c.document_id).where(table.c.status == NEW)))
-        connection.execute(update(table).where(table.c.status == NEW)
-                           .values(status=PROCESSING, status_updated_at=_now()))
-        connection.commit()
+    with db.session(database_path) as session:
+        db.write_lock(session, f"claim:{db.schema_name(database_path)}.{model.__tablename__}")
+        condition = model.status == NEW
+        if document_ids is not None:
+            condition = condition & model.document_id.in_(list(document_ids))
+        ids = set(session.scalars(select(model.document_id).where(condition)))
+        session.execute(update(model).where(condition).values(status=PROCESSING, status_updated_at=_now())
+                        .execution_options(synchronize_session=False))
     return ids
 
 
-def _set_status(database_path: str | Path, table: Table, document_ids: Iterable[str], status: str) -> int:
+def _set_status(database_path: str | Path, model: type[News] | type[NewsSummary], document_ids: Iterable[str],
+                status: str) -> int:
     if status not in STATUSES:
         raise ValueError(f"статус должен быть одним из {STATUSES}")
     now = _now()
     ids = list(document_ids)
-    with db.engine(database_path).begin() as connection:
-        before = db.changes(connection)
-        for part in db.chunks(ids):
-            connection.execute(update(table).where(table.c.document_id.in_(part))
-                               .values(status=status, status_updated_at=now))
-        return db.changes(connection) - before
+    with db.session(database_path) as session:
+        return sum(session.execute(update(model).where(model.document_id.in_(part))
+                                   .values(status=status, status_updated_at=now)
+                                   .execution_options(synchronize_session=False)).rowcount
+                   for part in db.chunks(ids))
 
 
 def delete_summaries(database_path: str | Path, document_ids: Iterable[str]) -> int:
     """Удаляет новости из ``news_summary`` (и их источники) и возвращает число удалённых записей."""
     ids = list(document_ids)
-    deleted = _delete(database_path, NEWS_SUMMARY, ids)
-    with db.engine(database_path).begin() as connection:
-        for part in db.chunks(ids):
-            connection.execute(delete(NEWS_SOURCES).where(NEWS_SOURCES.c.document_id.in_(part)))
+    deleted = _delete(database_path, NewsSummary, ids)
+    _delete(database_path, NewsSource, ids)
     return deleted
-
-
-# --- перевод из прежнего формата ------------------------------------------------
-
-
-def _migrate(bind: Engine, table: Table) -> None:
-    """Таблица с JSON-колонкой ``metadata`` → таблица с колонкой на каждое поле."""
-    name = table.name
-    with bind.begin() as connection:
-        rows = [db.row_dict(row) for row in connection.exec_driver_sql(f"SELECT * FROM {name}")]
-        connection.exec_driver_sql(f"ALTER TABLE {name} RENAME TO {name}_old_format")
-        for index in inspect(connection).get_indexes(f"{name}_old_format"):
-            connection.exec_driver_sql(f"DROP INDEX IF EXISTS {index['name']}")
-        table.create(connection)
-        if table is NEWS:
-            items = [StoredNews(row["document_id"], row["text"], json.loads(row["metadata"] or "{}")) for row in rows]
-            _insert(connection, NEWS.insert(), [{**_news_row(item), "status": NEW} for item in items])
-        else:
-            items = [ProcessedNews(row["document_id"], row["text"], row["title"], row["first_paragraph"],
-                                   row["audience_text"], json.loads(row["metadata"] or "{}")) for row in rows]
-            _write_summaries(connection, NEWS_SUMMARY.insert(), items)
-        connection.exec_driver_sql(f"DROP TABLE {name}_old_format")
-    db.forget(bind)
 
 
 # --- Отпечатки уникальных новостей (unique.db) ---------------------------
@@ -588,11 +626,12 @@ def ensure_fingerprint_schema(database_path: str | Path) -> None:
     if db.is_ensured(bind, "unique"):
         return
     ensure_summary_schema(database_path)
-    db.ensure_tables(bind, [NEWS_FINGERPRINT])
-    with bind.begin() as connection:
-        connection.execute(
-            update(NEWS_SUMMARY).where(NEWS_SUMMARY.c.status != READY)
-            .values(status=READY, status_updated_at=func.coalesce(NEWS_SUMMARY.c.status_updated_at, _now()))
+    db.ensure_tables(bind, [NewsFingerprint])
+    with db.session(bind) as session:
+        session.execute(
+            update(NewsSummary).where(NewsSummary.status != READY)
+            .values(status=READY, status_updated_at=func.coalesce(NewsSummary.status_updated_at, _now()))
+            .execution_options(synchronize_session=False)
         )
     db.mark_ensured(bind, "unique")
 
@@ -613,11 +652,9 @@ def insert_unique_news(
     поднимается ``sqlalchemy.exc.IntegrityError`` и не записывается ничего.
     """
     ensure_fingerprint_schema(database_path)
-    with db.engine(database_path).begin() as connection:
-        inserted = _write_summaries(connection, NEWS_SUMMARY.insert(), list(items), status=READY)
-        rows = _fingerprint_rows(fingerprints)
-        if rows:
-            connection.execute(NEWS_FINGERPRINT.insert(), rows)
+    with db.session(database_path) as session:
+        inserted = _write_summaries(session, insert(NewsSummary), list(items), status=READY)
+        session.add_all(NewsFingerprint(**row) for row in _fingerprint_rows(fingerprints))
         return inserted
 
 
@@ -626,17 +663,16 @@ def upsert_fingerprints(database_path: str | Path, fingerprints: Iterable[Stored
     ensure_fingerprint_schema(database_path)
     rows = _fingerprint_rows(fingerprints)
     if rows:
-        with db.engine(database_path).begin() as connection:
-            connection.execute(db.upsert(NEWS_FINGERPRINT), rows)
+        with db.session(database_path) as session:
+            session.execute(db.upsert(NewsFingerprint), rows)
 
 
 def read_fingerprints(database_path: str | Path) -> list[StoredFingerprint]:
     """Читает отпечатки всех уникальных новостей."""
     ensure_fingerprint_schema(database_path)
-    with db.engine(database_path).connect() as connection:
-        rows = connection.execute(select(NEWS_FINGERPRINT.c.document_id, NEWS_FINGERPRINT.c.text_hash,
-                                         NEWS_FINGERPRINT.c.url_key, NEWS_FINGERPRINT.c.minhash)).all()
-    return [StoredFingerprint(*row) for row in rows]
+    with db.session(database_path) as session:
+        return [StoredFingerprint(row.document_id, row.text_hash, row.url_key, row.minhash)
+                for row in session.scalars(select(NewsFingerprint))]
 
 
 def find_by_fingerprint(
@@ -657,9 +693,9 @@ def find_by_fingerprint(
     if len(given) > 1:
         raise ValueError("Передайте одно условие: document_id, text_hash или url_key.")
     column, value = given[0]
-    with db.engine(database_path).connect() as connection:
-        return connection.scalar(select(NEWS_FINGERPRINT.c.document_id)
-                                 .where(NEWS_FINGERPRINT.c[column] == value).limit(1))
+    with db.session(database_path) as session:
+        return session.scalar(select(NewsFingerprint.document_id)
+                              .where(getattr(NewsFingerprint, column) == value).limit(1))
 
 
 def append_sources(database_path: str | Path, sources: dict[str, list[dict[str, Any]]]) -> int:
@@ -671,14 +707,12 @@ def append_sources(database_path: str | Path, sources: dict[str, list[dict[str, 
     """
     ensure_summary_schema(database_path)
     updated = 0
-    with db.engine(database_path).begin() as connection:
+    with db.session(database_path) as session:
         for document_id, entries in sources.items():
-            exists = connection.scalar(select(NEWS_SUMMARY.c.document_id)
-                                       .where(NEWS_SUMMARY.c.document_id == document_id))
-            if exists is None:
+            if session.get(NewsSummary, document_id) is None:
                 continue
-            start = connection.scalar(select(func.coalesce(func.max(NEWS_SOURCES.c.position) + 1, 0))
-                                      .where(NEWS_SOURCES.c.document_id == document_id))
-            if _insert(connection, db.insert_ignore(NEWS_SOURCES), _source_rows(document_id, entries, start)):
+            start = session.scalar(select(func.coalesce(func.max(NewsSource.position) + 1, 0))
+                                   .where(NewsSource.document_id == document_id))
+            if _execute_counting(session, db.insert_ignore(NewsSource), _source_rows(document_id, entries, start)):
                 updated += 1
     return updated

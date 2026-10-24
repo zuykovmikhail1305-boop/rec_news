@@ -19,6 +19,11 @@
 пользователя отдаёт :meth:`MLService.user_news` (``GET /users/{id}/news``).
 Фоновый воркер, который обрабатывает новости сам каждые 10 с, включается
 переменной ``REC_NEWS_PIPELINE_WORKER=1``.
+
+С брокером (``REC_NEWS_QUEUE=celery``, docs/broker.md) новости обрабатываются и по одной: сообщение
+``NewsDiscovered`` / ``AnalyzeNews`` → задача ``analytics.analyze`` → :meth:`MLService.process_news`
+(:class:`tasks.news_analysis.NewsAnalysis`) → ``AnalysisCompleted``. Обработка с дедупликацией идёт под
+блокировкой ``pipeline`` (``storage.db.named_lock``) — одной на все процессы.
 """
 
 from __future__ import annotations
@@ -33,7 +38,7 @@ from typing import Any
 from news_pipeline.agent import BusinessInsightAgent
 from news_pipeline.analytics import AnalyticsMatcher, EventInput
 from news_pipeline.analytics.corpus import load_fixture_materials
-from news_pipeline.config import DEMO_NOW, NEWS_DB, SUMMARY_DB, UNIQUE_DB
+from news_pipeline.config import DEMO_NOW, NEWS_DB, QDRANT_URL, SUMMARY_DB, UNIQUE_DB
 from news_pipeline.dedup.drop_dublicate import NewsDeduplicator
 from news_pipeline.env import env_flag
 from news_pipeline.insights.card import InsightCardAgent
@@ -70,8 +75,10 @@ from news_pipeline.schemas import (
     UserProfileIn,
 )
 from news_pipeline.settings import SETTINGS
+from news_pipeline.storage import db
 from news_pipeline.storage.feedback_db import FeedbackStore
 from news_pipeline.tasks.insight_jobs import InsightJobs
+from news_pipeline.tasks.news_analysis import NewsAnalysis
 from news_pipeline.tasks.messages import PROCESSING_QUEUE, ProcessingTask
 from news_pipeline.tasks.queue import create_queue
 from news_pipeline.storage.news_db import StoredNews, insert_news, read_summaries, status_counts, summary_ids
@@ -105,7 +112,6 @@ class MLService:
                 self.analytics.index_materials(materials)
                 self.analytics_bootstrapped = True
         self.worker_interval = worker_interval
-        self._pipeline_lock = threading.Lock()
         self._stop = threading.Event()
         self._worker: threading.Thread | None = None
         self._companies: Any | None = None
@@ -118,16 +124,31 @@ class MLService:
         self.agent = BusinessInsightAgent(self)
         self.user_news_store = UserNewsStore()
         self.insight_cards = InsightCardAgent(self)
-        # Очередь задач: сейчас потоки в процессе, позже — Celery (tasks/queue.py, create_queue).
+        # Очередь задач: потоки в процессе или Celery + RabbitMQ (REC_NEWS_QUEUE, tasks/queue.py).
         self.queue = create_queue()
+        if not self.queue.in_process and not QDRANT_URL:
+            log.warning("очередь Celery без Qdrant-сервера (REC_NEWS_QDRANT_URL): локальную базу Qdrant "
+                        "открывает только один процесс — API и воркеры не смогут работать одновременно")
         self.queue.subscribe(PROCESSING_QUEUE, self.handle_processing, workers=1)  # одна обработка за раз
         self.insight_jobs = InsightJobs(self, self.queue)
+        self.news_analysis = NewsAnalysis(self, self.queue)
 
     # --- фоновый конвейер новостей -------------------------------------------
 
+    def process_news(self, news_ids: list[str]) -> dict[str, int]:
+        """Обработка выбранных новостей (задача ``analytics.analyze``): подготовка — без общей блокировки,
+        параллельно с другими новостями; дедупликация и подбор аналитики — под блокировкой ``pipeline``
+        (одна на все процессы): новость сравнивается с уже обработанными."""
+        prepared = self.summarizer.process_pending(news_ids)
+        with db.named_lock("pipeline"):
+            results = self.dedup.process_pending_news()
+            matched = self.match_pending_events()
+        return {"prepared": len(prepared.processed), "deduplicated": len(results),
+                "unique": sum(result is None for result in results), "analytics_matched": matched}
+
     def run_pipeline_once(self) -> dict[str, int]:
         """Один проход: подготовка новостей, дедупликация с событиями, подбор аналитики."""
-        with self._pipeline_lock:
+        with db.named_lock("pipeline"):
             prepared = self.summarizer.process_pending()
             results = self.dedup.process_pending_news()
             matched = self.match_pending_events()
@@ -174,7 +195,7 @@ class MLService:
 
     def index_analytics(self, materials: list[AnalyticsIn]) -> int:
         """Индексация новых материалов и повторный подбор для событий за 7 дней (§8)."""
-        with self._pipeline_lock:
+        with db.named_lock("pipeline"):
             chunks = self.analytics.index_materials(materials)
             for event_id in self.analytics.events_to_refresh():
                 event = self.event_input(event_id)
@@ -251,7 +272,7 @@ class MLService:
                      insights_top: int = 0) -> None:
         store = self.user_news_store
         try:
-            with self._pipeline_lock:
+            with db.named_lock("pipeline"):
                 prepared = self.summarizer.process_pending()
                 store.update_run(run_id, stage="dedup", news_prepared=len(prepared.processed))
                 results = self.dedup.process_pending_news()

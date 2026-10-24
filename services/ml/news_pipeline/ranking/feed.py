@@ -41,6 +41,7 @@ from qdrant_client import models
 from news_pipeline.config import DATA_DIR
 from news_pipeline.index.embeddig import QdrantIndex
 from news_pipeline.llm.client import LLM, LLMError, LLMUnavailable, default_llm
+from news_pipeline.prompts import prompt
 from news_pipeline.references import entity_key, role_topic_weight, TOPICS_BY_NAME
 from news_pipeline.schemas import FeedItem, InterestProfile, Signals
 from news_pipeline.settings import SETTINGS
@@ -324,19 +325,7 @@ class FeedBuilder:
 
 # --- промпт реранка -------------------------------------------------------------
 
-_RERANK_PROMPT = """Ты аналитик Альфа-Банка. Оцени, насколько новость важна этому руководителю \
-для решений по его компании.
-
-score:
-3 — прямо влияет на бизнес компании или на зону ответственности роли;
-2 — заметно влияет через отрасль, контрагентов, рынок или финансы компании;
-1 — косвенно связана;
-0 — не связана.
-
-why_relevant — одно предложение для руководителя, почему это важно именно его компании \
-(«…для вашей компании…»), без пересказа новости и без фактов, которых нет в тексте.
-Ответ — JSON.
-/no_think"""
+_RERANK_PROMPT = prompt("feed.rerank")
 
 _RERANK_SCHEMA = {
     "type": "object",

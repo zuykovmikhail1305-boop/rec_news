@@ -10,16 +10,19 @@ ML-сервис (`services/ml`) получает новости из базы, �
 бэкенд ──HTTP──► API (news_pipeline/api.py) ──► MLService (service.py) ──► компоненты
                        │  ставит задачи                                     │
                        ▼                                                    ▼
-                очередь задач (tasks/) ──► обработчики ──► SQLite (data/*.db) + Qdrant (векторы)
-                       processing.run                       LLM API хакатона (llm/client.py)
-                       insights.generate
+                очередь задач (tasks/) ──► обработчики ──► SQLite (data/*.db) или PostgreSQL (схемы ml_*)
+                       processing.run                       + Qdrant (векторы)
+                       insights.generate                    LLM API хакатона (llm/client.py)
+                       analytics.analyze ◄── NewsDiscovered / AnalyzeNews (RabbitMQ, другие сервисы)
+                       feeds.refresh     ──► AnalysisCompleted / AnalysisFailed (exchange analytics.events)
 ```
 
 - **API** только принимает запросы, ставит долгую работу в очередь и читает готовые результаты из базы.
 - **`MLService`** — один объект на процесс: держит компоненты, хранилища и очередь.
-- **Очередь задач** выполняет обработку новостей и построение карточек. Сейчас это потоки внутри процесса
-  API, позже — воркеры Celery (`docs/insight_jobs.md`).
-- **Состояние** — запуски, задания, ленты, карточки, диалоги — хранится в базе, а не в памяти процесса.
+- **Очередь задач** выполняет обработку новостей и построение карточек: потоки внутри процесса API
+  (`REC_NEWS_QUEUE=local`) или воркеры Celery с брокером RabbitMQ (`REC_NEWS_QUEUE=celery`, `docs/broker.md`).
+- **Состояние** — запуски, задания, ленты, карточки, диалоги — хранится в базе, а не в памяти процесса:
+  SQLite-файлы или PostgreSQL (`REC_NEWS_DATABASE_URL`).
 
 ## 1. Обработка новостей
 
@@ -122,17 +125,23 @@ ML-сервис (`services/ml`) получает новости из базы, �
 
 ## 6. Очередь задач
 
-`tasks/`. Код знает только интерфейс `TaskQueue` (`publish`, `subscribe`, `close`, `in_process`):
+`tasks/`. Код знает только интерфейс `TaskQueue` (`publish`, `subscribe`, `emit`, `close`, `in_process`):
 
 | Очередь | Задача | Обработчик | Одновременно |
 |---|---|---|---|
-| `processing.run` | `ProcessingTask` | `MLService.handle_processing` | 1 |
-| `insights.generate` | `InsightTask` | `InsightJobs.handle` | `REC_NEWS_INSIGHT_WORKERS` |
+| `processing.run` | `ProcessingTask` | `MLService.handle_processing` | 1 (блокировка `pipeline`) |
+| `insights.generate` | `InsightTask` | `InsightJobs.handle` | `REC_NEWS_INSIGHT_WORKERS` / `--concurrency` |
+| `analytics.analyze` | `AnalyzeNewsTask` (`news_id`) | `NewsAnalysis.handle` | подготовка — параллельно, дедупликация — по одной |
+| `feeds.refresh` | `FeedsRefreshTask` | `NewsAnalysis.handle_feeds` | 1 |
 
 Сообщения — JSON с полем `version`; обработчики принимают тело сообщения и не зависят от процесса, в
-котором запущены. Сейчас очередь — `LocalQueue` (потоки в процессе API): после рестарта незавершённые
-запуски и карточки ставятся заново. Переход на Celery — `docs/insight_jobs.md`: реализация `CeleryQueue`,
-отдельные воркеры, Qdrant-сервер (`REC_NEWS_QDRANT_URL`).
+котором запущены. Обработчик просит повтор исключением `RetryLater`; после всех повторов — `on_give_up`
+(у брокера сообщение уходит в очередь отказов `<очередь>.dlq`). Реализации:
+- `LocalQueue` (`REC_NEWS_QUEUE=local`, по умолчанию) — потоки в процессе API: после рестарта
+  незавершённые запуски и карточки ставятся заново;
+- `CeleryQueue` (`REC_NEWS_QUEUE=celery`) — Celery + RabbitMQ: отдельные воркеры, приём `NewsDiscovered` /
+  `AnalyzeNews` от других сервисов и отправка `AnalysisCompleted`; нужен Qdrant-сервер
+  (`REC_NEWS_QDRANT_URL`). Подробно — `docs/broker.md`.
 
 ## 7. Общая инфраструктура
 
@@ -148,16 +157,26 @@ ML-сервис (`services/ml`) получает новости из базы, �
   | relations | DeepSeek-V4.1-Flash | судья аналитики, проверщик карточки, оценщик чата |
   | text | Kimi-K2.6 | связка с аналитикой, позиция банка, главная фраза, писатели чата |
 
-- **Хранение** — SQLite через SQLAlchemy Core (`storage/db.py`; таблицы описаны рядом с кодом, колонки —
-  `docs/news_db.md`) и Qdrant (локальная база `data/qdrant` или сервер по `REC_NEWS_QDRANT_URL`).
-- **Настройки** — веса, пороги, версии промптов: `config/ml.toml`; справочники (темы, роли, сущности,
+- **Хранение** — SQLAlchemy Core (`storage/db.py`; таблицы описаны рядом с кодом, колонки —
+  `docs/news_db.md`): файлы SQLite в `data/` или, если задан `REC_NEWS_DATABASE_URL`, PostgreSQL — каждая
+  база становится схемой (`data/news.db` → `ml_news`), код и запросы те же. Перенос данных —
+  `scripts/migrate_to_postgres.py`. Векторы — Qdrant (локальная база `data/qdrant` или сервер по
+  `REC_NEWS_QDRANT_URL`).
+- **Настройки** — веса, пороги, версии промптов: `config/ml.toml`; тексты промптов с пояснениями: `config/prompts.toml`
+  (читает `news_pipeline/prompts.py`); справочники (темы, роли, сущности,
   надёжность источников, тон, продукты банка): `config/references/`; подключения: `.env`.
 - **Без LLM** все компоненты работают в упрощённом режиме: лента без реранка, упрощённая карточка
   (`degraded`), ответ чата подборкой источников (`fallback`).
 
 ## 8. Оценка качества лент
 
-`scripts/eval_feed.py` строит ленты четырёх версий (близость → сигналы → LLM-реранк → разнообразие) и
-считает nDCG@10, Precision@10, MRR, разнообразие, персонализацию, покрытие. Разметка — LLM-судья или
-эталон размеченного набора (`scripts/make_eval_set.py`, `fixtures/eval_set/`). Отчёты: `docs/feed_eval.md`,
-`docs/feed_eval_gold.md`. На эталоне nDCG@10 рабочей ленты — 0,57.
+Оценка идёт только по размеченному набору `fixtures/eval_set/` (`news.jsonl` — новости, `labels.json` —
+оценка 0–3 для каждой пары «пользователь — новость»; создаётся `scripts_for_tests/make_eval_set*.py`):
+
+1. `scripts_for_tests/prepare_eval_news.py` — загружает набор в `data_eval/` (лишние новости удаляет,
+   недостающие профили копирует из `data/`) и обрабатывает его тем же кодом, что `POST /processing.enqueue`;
+2. `scripts_for_tests/eval_feed.py` — строит ленты четырёх версий (близость → сигналы → LLM-реранк →
+   разнообразие) и считает по эталону nDCG@10, Precision@10, MRR, а также разнообразие, персонализацию,
+   покрытие; LLM-судья оценивает топ-20 и сверяется с эталоном. Отчёт — `docs_utils/feed_eval_gold.md`.
+
+На эталоне из 351 новости nDCG@10 рабочей ленты (v4) — 0,47, Precision@10 — 41 %.

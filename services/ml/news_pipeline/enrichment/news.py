@@ -20,6 +20,7 @@ import numpy as np
 
 from news_pipeline.index.embeddig import embed
 from news_pipeline.llm.client import LLM, LLMError, LLMUnavailable, default_llm
+from news_pipeline.prompts import prompt
 from news_pipeline.recommendation.audience_profile import regions_in_text
 from news_pipeline.references import ENTITIES_BY_ID, TOPICS, TOPICS_BY_ID, find_entities, source_rating
 
@@ -155,21 +156,7 @@ def importance_heuristic(entities: list[str], topics: dict[str, float], source: 
 
 # --- темы и важность через LLM ------------------------------------------------
 
-_CLASSIFY_PROMPT = """Ты аналитик Альфа-Банка. Классифицируй деловую новость.
-
-1. topics — 1–3 темы из списка (id) с вероятностью 0–1; основная тема — с наибольшей.
-2. importance — значимость для крупного бизнеса в России, 1–5:
-   5 — решение ЦБ или правительства, затрагивающее всю экономику;
-   4 — событие, меняющее условия для целой отрасли;
-   3 — заметное событие для нескольких крупных компаний или региона;
-   2 — новость одной компании;
-   1 — локальная или малозначимая новость.
-3. event_type — одно из: {event_types}.
-
-Темы (id — название — описание):
-{topics}
-
-Ответ — JSON."""
+_CLASSIFY_PROMPT = prompt("news.classify")
 
 _CLASSIFY_SCHEMA = {
     "type": "object",
