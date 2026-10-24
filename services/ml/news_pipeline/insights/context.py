@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from news_pipeline.config import SUMMARY_DB, UNIQUE_DB
-from news_pipeline.insights.facts import CompanyFact, company_facts
+from news_pipeline.insights.facts import CompanyFact
 from news_pipeline.insights.numbers import numbers_in
 from news_pipeline.preprocessing.cleaning import sentences
 from news_pipeline.references import source_rating
@@ -254,8 +254,7 @@ def build_context(service: "MLService", user_id: str, news_id: str) -> CardConte
             )
 
     user = service.profiles.get_input(user_id)
-    companies, payments = service.dataset() if user and user.company_id else (None, None)
-    facts = company_facts(user, companies=companies, payments=payments) if user else []
+    facts = service.company_facts(user) if user else []
     return CardContext(
         user_id=user_id, news_id=news_id, event_id=event_id, title=row.title,
         published_at=_parse_time(row.publication_time), profile=profile, user=user, news=news,

@@ -298,3 +298,71 @@ class UserNewsResponse(BaseModel):
     pipeline_version: str | None = None
     total: int = 0
     items: list[UserNewsItem]
+
+
+# --- Профили пользователей (GET /profiles, GET /profiles/{user_id}) ---------------------
+
+
+class ProfileListItem(BaseModel):
+    """Профиль в списке: кто это и какая компания."""
+
+    user_id: str
+    role: str
+    company_name: str | None = None
+    industry: str | None = None
+    company_id: str | None = None
+
+
+class ProfileList(BaseModel):
+    total: int
+    items: list[ProfileListItem]
+
+
+class AspectInfo(BaseModel):
+    """Аспект интереса без вектора."""
+
+    aspect_id: str
+    title: str
+    description: str
+    examples: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    entities: list[str] = Field(default_factory=list)
+    topic: str
+    weight: float
+
+
+class ProfileInterests(BaseModel):
+    """Профиль интересов, построенный по анкете: на нём держится подбор ленты."""
+
+    source: Literal["llm", "rules"]
+    aspects: list[AspectInfo]
+    entities: dict[str, float]          # важные пользователю сущности и их вес 0–1
+    topic_weights: dict[str, float]     # вес тем 0–1
+    pipeline_version: str = ""
+
+
+class CompanyFactInfo(BaseModel):
+    """Факт о компании из анкеты и датасета — на них опираются карточки инсайтов (``F1…``)."""
+
+    id: str
+    text: str
+    kind: str      # industry, region, size, product, trade, suppliers, customers, concentration, profile
+    origin: str    # dataset | анкета | платежи
+
+
+class ProfileActivity(BaseModel):
+    """Что уже посчитано для пользователя."""
+
+    feed_status: Literal["ready", "not_computed"]
+    feed_total: int = 0
+    feed_computed_at: datetime | None = None
+    insight_cards: int = 0
+    chat_session_id: str | None = None
+
+
+class ProfileDetails(BaseModel):
+    user_id: str
+    profile: UserProfileIn               # анкета
+    interests: ProfileInterests
+    company_facts: list[CompanyFactInfo]
+    activity: ProfileActivity

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy import Column, Index, MetaData, Table, Text, select
+from sqlalchemy import Column, Index, MetaData, Table, Text, func, select
 
 from news_pipeline.config import DATA_DIR
 from news_pipeline.insights.schemas import InsightCard, InsightCardSummary
@@ -81,6 +81,11 @@ class InsightCardStore:
         with self.engine.connect() as connection:
             value = connection.scalar(select(INSIGHT_CARDS.c.card).where(INSIGHT_CARDS.c.card_id == card_id))
         return InsightCard.model_validate_json(value) if value else None
+
+    def count(self, user_id: str) -> int:
+        with self.engine.connect() as connection:
+            return connection.scalar(select(func.count()).select_from(INSIGHT_CARDS)
+                                     .where(INSIGHT_CARDS.c.user_id == user_id))
 
     def summaries(self, user_id: str, news_ids: list[str]) -> dict[str, InsightCardSummary]:
         if not news_ids:

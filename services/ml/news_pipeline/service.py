@@ -37,6 +37,7 @@ from news_pipeline.config import DEMO_NOW, NEWS_DB, SUMMARY_DB, UNIQUE_DB
 from news_pipeline.dedup.drop_dublicate import NewsDeduplicator
 from news_pipeline.env import env_flag
 from news_pipeline.insights.card import InsightCardAgent
+from news_pipeline.insights.facts import CompanyFact, company_facts
 from news_pipeline.insights.schemas import InsightCard
 from news_pipeline.llm.client import default_llm
 from news_pipeline.preprocessing.news_summarizer import NewsSummarizer
@@ -46,6 +47,8 @@ from news_pipeline.ranking.feed import FeedBuilder
 from news_pipeline.ranking.user_news import UserNewsRow, UserNewsStore, now_iso
 from news_pipeline.schemas import (
     AnalyticsIn,
+    AspectInfo,
+    CompanyFactInfo,
     EventAnalyticsResult,
     FeedAnalytics,
     FeedbackEvent,
@@ -55,6 +58,11 @@ from news_pipeline.schemas import (
     InterestProfile,
     NewsIn,
     PipelineRun,
+    ProfileActivity,
+    ProfileDetails,
+    ProfileInterests,
+    ProfileList,
+    ProfileListItem,
     Signals,
     UserNewsAnalytics,
     UserNewsItem,
@@ -102,6 +110,8 @@ class MLService:
         self._worker: threading.Thread | None = None
         self._companies: Any | None = None
         self._payments: Any | None = None
+        self._dataset_lock = threading.Lock()
+        self._facts_cache: dict[tuple[str, str], list[CompanyFact]] = {}
         self._executor = ThreadPoolExecutor(4)
         self.profile_status: dict[str, str] = {}
         self.feedback = FeedbackStore()
@@ -350,6 +360,10 @@ class MLService:
                                 computed_at=datetime.fromisoformat(rows[0].computed_at),
                                 pipeline_version=rows[0].pipeline_version, total=total, items=items)
 
+    def submit(self, fn, *args):
+        """Фоновая задача в пуле сервиса (подготовка, не требующая очереди)."""
+        return self._executor.submit(fn, *args)
+
     def start_worker(self) -> None:
         def loop() -> None:
             while not self._stop.is_set():
@@ -393,13 +407,34 @@ class MLService:
     # --- профили --------------------------------------------------------------
 
     def dataset(self) -> tuple[Any, Any]:
-        """Компании и платежи из ``dataset/*.db`` (читаются один раз)."""
-        if self._companies is None:
-            from news_pipeline.storage.dataset_db import COMPANIES, PAYMENTS, exists, read_table
+        """Компании и платежи из ``dataset/*.db`` (читаются один раз; платежей 1,4 млн — несколько секунд)."""
+        with self._dataset_lock:
+            if self._companies is None:
+                from news_pipeline.storage.dataset_db import COMPANIES, PAYMENTS, exists, read_table
 
-            self._companies = read_table(COMPANIES) if exists(COMPANIES) else None
-            self._payments = read_table(PAYMENTS) if exists(PAYMENTS) else None
+                self._companies = read_table(COMPANIES) if exists(COMPANIES) else None
+                self._payments = read_table(PAYMENTS) if exists(PAYMENTS) else None
         return self._companies, self._payments
+
+    def warm_up(self) -> None:
+        """Заранее читает датасет и считает факты о компаниях всех профилей: иначе первый запрос
+        профиля или карточки ждёт загрузки платежей (секунды)."""
+        try:
+            self.dataset()
+            for user in self.profiles.inputs():
+                self.company_facts(user)
+        except Exception:  # noqa: BLE001 - прогрев не должен ронять сервис
+            log.exception("прогрев датасета")
+
+    def company_facts(self, user: UserProfileIn) -> list[CompanyFact]:
+        """Факты о компании пользователя (``F1…``). Счёт по платежам датасета долгий, поэтому результат
+        кэшируется по анкете: изменилась анкета — факты пересчитываются."""
+        key = (user.user_id, self.profiles.input_hash(user))
+        cached = self._facts_cache.get(key)
+        if cached is None:
+            companies, payments = self.dataset() if user.company_id else (None, None)
+            cached = self._facts_cache[key] = company_facts(user, companies=companies, payments=payments)
+        return cached
 
     def build_profile(self, user: UserProfileIn) -> InterestProfile:
         """Строит и сохраняет профиль интересов (если анкета не изменилась — берёт сохранённый)."""
@@ -428,6 +463,36 @@ class MLService:
                 log.exception("не удалось построить профиль %s", user.user_id)
 
         self._executor.submit(task)
+
+    def profile_list(self, *, limit: int = 100, offset: int = 0) -> ProfileList:
+        """Профили пользователей, по которым ML-часть может строить ленты, карточки и чат."""
+        items = [ProfileListItem(user_id=user.user_id, role=user.role, company_name=user.company_name,
+                                 industry=user.industry, company_id=user.company_id)
+                 for user in self.profiles.inputs(limit=limit, offset=offset)]
+        return ProfileList(total=self.profiles.count(), items=items)
+
+    def profile_details(self, user_id: str) -> ProfileDetails:
+        """Анкета, профиль интересов, данные компании и что уже посчитано. ``KeyError`` — профиля нет."""
+        interests, user = self.profiles.get(user_id), self.profiles.get_input(user_id)
+        if interests is None or user is None:
+            raise KeyError(user_id)
+        facts = self.company_facts(user)
+        feed = self.user_news_store.for_user(user_id, limit=1)
+        return ProfileDetails(
+            user_id=user_id, profile=user,
+            interests=ProfileInterests(
+                source=interests.source, entities=interests.entities, topic_weights=interests.topic_weights,
+                pipeline_version=interests.pipeline_version,
+                aspects=[AspectInfo(**aspect.model_dump(exclude={"embedding"})) for aspect in interests.aspects],
+            ),
+            company_facts=[CompanyFactInfo(id=f.id, text=f.text, kind=f.kind, origin=f.origin) for f in facts],
+            activity=ProfileActivity(
+                feed_status="ready" if feed else "not_computed", feed_total=self.user_news_store.count(user_id),
+                feed_computed_at=datetime.fromisoformat(feed[0].computed_at) if feed else None,
+                insight_cards=self.insight_cards.store.count(user_id),
+                chat_session_id=self.agent.store.user_session(user_id),
+            ),
+        )
 
     # --- лента ----------------------------------------------------------------
 
