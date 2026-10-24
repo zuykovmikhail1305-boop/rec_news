@@ -1,0 +1,26 @@
+{% extends "demo_base.html" %}
+{% block title %}Выбор профиля · Бизнес Онлайн{% endblock %}
+{% block body %}
+<main class="auth"><section class="auth-card demo-login">
+<div class="brand"><div class="brand-mark">А</div><div>Бизнес Онлайн<small>Демонстрационный сервис</small></div></div>
+<h1>Выберите профиль</h1><p class="sub">Войдите от имени одной из компаний. Все профили демонстрационные — пароль не нужен.</p>
+{% if error %}<div class="demo-alert" role="alert">{{ error }}</div>{% endif %}
+{% if profiles and profiles.items %}
+<div class="profile-heading"><span>Доступные профили</span><span>{{ profiles.total }}</span></div>
+<div class="profile-grid">
+{% for profile in profiles.items %}
+<form action="/login" method="post">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="user_id" value="{{ profile.user_id }}">
+<button class="profile-choice" type="submit" aria-label="Войти: {{ profile.company_name or profile.user_id }}, {{ profile.role }}">
+<span class="profile-avatar">{{ (profile.company_name or profile.user_id)[:1] }}</span>
+<span class="profile-label"><strong>{{ profile.company_name or profile.user_id }}</strong><span class="profile-role">{{ profile.role }}</span><span class="profile-industry">{{ profile.industry or 'Отрасль не указана' }}</span><small>Профиль {{ profile.user_id }}</small></span>
+<span class="profile-arrow" aria-hidden="true">→</span></button>
+</form>{% endfor %}</div>
+<nav class="profile-pager" aria-label="Страницы профилей">
+{% if offset > 0 %}<a href="/login?switch=true&amp;offset={{ [0, offset-page_size]|max }}">← Назад</a>{% endif %}
+{% if offset + page_size < profiles.total %}<a href="/login?switch=true&amp;offset={{ offset+page_size }}">Далее →</a>{% endif %}
+</nav>
+{% elif profiles %}<div class="empty-state"><h2>Пока нет доступных профилей</h2><p>После добавления профилей они появятся здесь.</p></div>{% endif %}
+{% if error or not profiles or not profiles.items %}<a class="btn btn-secondary" href="/login?switch=true">Обновить список</a>{% endif %}
+<p class="note">Вход открывает данные выбранного профиля. Можно выйти и выбрать другую компанию в любой момент.</p>
+</section></main>{% endblock %}

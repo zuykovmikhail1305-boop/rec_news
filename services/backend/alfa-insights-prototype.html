@@ -1,0 +1,1009 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Инсайты · прототип</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --red:#EF3124; --red-dark:#D4202C; --red-soft:#FDECEC;
+  --bg:#F3F4F5; --card:#FFFFFF; --text:#0B1F35; --muted:#6D7986; --line:#E4E6E8; --line2:#EEF0F2;
+  --ai:#7B4DFF; --ai-soft:#F3EEFF;
+  --hyp:#B7791F; --hyp-soft:#FFF7E0; --hyp-line:#E8B53A;
+  --risk:#D4202C; --risk-soft:#FDEDEE;
+  --opp:#0C8A52; --opp-soft:#E6F6EE;
+  --neutral:#56616E; --neutral-soft:#EEF0F2;
+  --radius:16px; --radius-sm:12px;
+  --fs:15px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;font-size:var(--fs);line-height:1.45}
+body.detailed{--fs:16.5px}
+button{font:inherit;cursor:pointer}
+input,select{font:inherit}
+a{color:inherit}
+.hidden{display:none!important}
+
+/* ---------- auth ---------- */
+.auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.auth-card{background:#fff;border-radius:24px;padding:40px;width:100%;max-width:440px;box-shadow:0 8px 32px rgba(11,31,53,.06)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px}
+.brand-mark{width:32px;height:32px;border-radius:9px;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px}
+.brand small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+.auth h1{font-size:26px;margin:28px 0 6px}
+.auth p.sub{color:var(--muted);margin:0 0 24px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.field input,.field select{width:100%;height:52px;border:1px solid var(--line);border-radius:12px;padding:0 16px;background:#F8F9FA;color:var(--text);outline:none}
+.field input:focus,.field select:focus{border-color:var(--text);background:#fff}
+.btn{height:48px;border-radius:12px;border:0;padding:0 20px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary{background:var(--red);color:#fff}
+.btn-primary:hover{background:var(--red-dark)}
+.btn-secondary{background:#F1F2F4;color:var(--text)}
+.btn-secondary:hover{background:#E6E8EB}
+.btn-ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn-sm{height:36px;padding:0 14px;font-size:14px;border-radius:10px}
+.btn-block{width:100%}
+.demo-users{margin-top:24px;border-top:1px solid var(--line);padding-top:18px}
+.demo-users h4{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:500}
+.demo-user{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.demo-user:hover{border-color:var(--text)}
+.demo-user.sel{border-color:var(--red);box-shadow:0 0 0 1px var(--red) inset}
+.ava{width:36px;height:36px;border-radius:50%;background:#E9ECEF;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex:none}
+.demo-user b{display:block;font-size:14px}
+.demo-user span{font-size:12.5px;color:var(--muted)}
+.note{font-size:12.5px;color:var(--muted);margin-top:14px}
+.org{display:flex;align-items:center;gap:14px;width:100%;border:1px solid var(--line);background:#fff;border-radius:14px;padding:16px;margin-bottom:10px;text-align:left}
+.org:hover{border-color:var(--text)}
+.org .ava{border-radius:10px;background:#F1F2F4}
+.org b{display:block}
+.org span{font-size:13px;color:var(--muted)}
+.org .count{margin-left:auto;background:var(--red-soft);color:var(--red-dark);font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap}
+
+/* ---------- shell ---------- */
+.app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+.side{background:#fff;border-right:1px solid var(--line);padding:20px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.side .brand{padding:0 8px 22px}
+.nav a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;text-decoration:none;color:var(--text);font-weight:500;margin-bottom:2px;cursor:pointer}
+.nav a:hover{background:#F3F4F5}
+.nav a.active{background:#F1F2F4;font-weight:600}
+.nav svg{width:20px;height:20px;flex:none;color:#5C6773}
+.nav .badge{margin-left:auto;background:var(--red);color:#fff;font-size:11.5px;font-weight:700;border-radius:10px;padding:1px 7px}
+.nav .ai-tag{font-size:10.5px;font-weight:700;color:var(--ai);background:var(--ai-soft);border-radius:6px;padding:1px 5px}
+.side-foot{margin-top:auto;font-size:12px;color:var(--muted);padding:12px}
+.main{min-width:0}
+.top{height:68px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 28px;position:sticky;top:0;z-index:20}
+.menu-btn{display:none;border:0;background:none;padding:6px}
+.switcher{position:relative}
+.switcher-btn{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:7px 12px;text-align:left;max-width:360px}
+.switcher-btn b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.switcher-btn span{font-size:12px;color:var(--muted)}
+.dropdown{position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(11,31,53,.12);padding:6px;min-width:320px;z-index:30}
+.dropdown button{display:flex;gap:10px;align-items:center;width:100%;border:0;background:none;text-align:left;padding:10px;border-radius:10px}
+.dropdown button:hover{background:#F3F4F5}
+.dropdown b{display:block;font-size:14px}
+.dropdown span{font-size:12px;color:var(--muted)}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.proto-pill{font-size:12px;color:var(--muted);border:1px dashed #C9CED4;border-radius:20px;padding:4px 10px;white-space:nowrap}
+.icon-btn{width:40px;height:40px;border-radius:12px;border:0;background:#F3F4F5;display:flex;align-items:center;justify-content:center}
+.user-chip{display:flex;align-items:center;gap:10px;font-size:14px}
+.user-chip .ava{background:#0B1F35;color:#fff}
+.content{padding:28px;max-width:1280px}
+.page-title{font-size:28px;font-weight:700;margin:0 0 4px;letter-spacing:-.01em}
+.page-sub{color:var(--muted);margin:0 0 22px}
+.card{background:var(--card);border-radius:var(--radius);padding:22px}
+.grid{display:grid;gap:16px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;border-radius:8px;padding:3px 9px;white-space:nowrap}
+.chip.risk{background:var(--risk-soft);color:var(--risk)}
+.chip.opp{background:var(--opp-soft);color:var(--opp)}
+.chip.neutral{background:var(--neutral-soft);color:var(--neutral)}
+.chip.ai{background:var(--ai-soft);color:var(--ai)}
+.chip.bank{background:var(--red-soft);color:var(--red-dark)}
+.chip.nobank{background:var(--hyp-soft);color:var(--hyp)}
+.chip.plain{background:#F1F2F4;color:#3C4753;font-weight:500}
+.chip.conf-ok{background:#E8F2FF;color:#1C5DB8}
+.chip.conf-one{background:#F1F2F4;color:#56616E}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+
+/* home */
+.hero-insight{background:linear-gradient(0deg,#fff,#fff);border-radius:20px;padding:24px;display:grid;grid-template-columns:1fr auto;gap:20px;border:1px solid var(--line);position:relative;overflow:hidden}
+.hero-insight:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--red)}
+.hero-insight .kicker{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);font-weight:600;margin-bottom:10px}
+.hero-insight h2{margin:0 0 8px;font-size:21px;line-height:1.3}
+.hero-insight p{margin:0 0 14px;color:#3C4753}
+.hero-side{display:flex;flex-direction:column;gap:8px;align-items:flex-end;justify-content:space-between}
+.accounts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.acc{background:#fff;border-radius:var(--radius);padding:20px}
+.acc span{color:var(--muted);font-size:13px}
+.acc b{display:block;font-size:22px;margin-top:6px}
+.quick{display:flex;gap:10px;flex-wrap:wrap}
+.quick button{background:#fff;border:0;border-radius:14px;padding:14px 18px;font-weight:600;display:flex;gap:10px;align-items:center}
+.ops{width:100%;border-collapse:collapse}
+.ops td{padding:12px 0;border-bottom:1px solid var(--line2);font-size:14px}
+.ops td:last-child{text-align:right;font-weight:600}
+.ops tr:last-child td{border-bottom:0}
+.section-h{display:flex;align-items:center;justify-content:space-between;margin:26px 0 12px}
+.section-h h3{margin:0;font-size:18px}
+
+/* feed */
+.feed-layout{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+.brief{background:#0B1F35;color:#fff;border-radius:20px;padding:22px 24px;margin-bottom:16px}
+.brief .kicker{font-size:13px;opacity:.7;display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.brief p{margin:0;font-size:16.5px;line-height:1.5}
+.brief .chip.ai{background:rgba(255,255,255,.12);color:#fff}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.seg{display:inline-flex;background:#E9EBEE;border-radius:12px;padding:3px}
+.seg button{border:0;background:none;border-radius:9px;padding:7px 12px;font-size:13.5px;font-weight:500;color:#3C4753}
+.seg button.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.filter{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 12px;font-size:13.5px;font-weight:500}
+.filter.on{background:var(--text);color:#fff;border-color:var(--text)}
+.icard{background:#fff;border-radius:var(--radius);padding:20px 22px;margin-bottom:12px;cursor:pointer;border:1px solid transparent;transition:border-color .15s}
+.icard:hover{border-color:#CDD2D7}
+.icard .meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.icard h3{margin:0 0 6px;font-size:18px;line-height:1.32}
+.icard p{margin:0;color:#3C4753}
+.icard .foot{display:flex;gap:14px;align-items:center;margin-top:14px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.icard .prio{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+.prio-high{background:var(--red)} .prio-medium{background:#F0A400} .prio-low{background:#B8C0C8}
+.icard .affects{font-size:13px;color:var(--muted);margin-top:8px}
+.empty{background:#fff;border-radius:var(--radius);padding:28px;text-align:center;color:var(--muted)}
+.panel h4{margin:0 0 4px;font-size:15px}
+.panel .hint{font-size:13px;color:var(--muted);margin:0 0 12px}
+.feat{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line2);font-size:13.5px}
+.feat:last-child{border-bottom:0}
+.feat .k{color:var(--muted);min-width:92px}
+.disclaimer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;margin-top:22px}
+
+/* insight detail */
+.detail-layout{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start}
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-weight:500;cursor:pointer;margin-bottom:14px;border:0;background:none;padding:0}
+.d-head h1{font-size:26px;line-height:1.25;margin:10px 0 6px;letter-spacing:-.01em}
+.d-head .date{color:var(--muted);font-size:13.5px}
+.layer{border-radius:var(--radius-sm);padding:16px 18px;margin-top:14px;position:relative}
+.layer .lh{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px}
+.layer .q{font-size:13px;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0;margin-left:auto}
+.layer p{margin:0}
+.layer.fact{background:#F5F6F7}
+.layer.fact .lh{color:#3C4753}
+.layer.bank{background:#fff;border:1px solid var(--line);border-left:4px solid var(--red)}
+.layer.bank .lh{color:var(--red-dark)}
+.layer.nobank{background:var(--hyp-soft);border:1px solid #F3DDA0}
+.layer.nobank .lh{color:var(--hyp)}
+.layer.ai{background:var(--ai-soft)}
+.layer.ai .lh{color:var(--ai)}
+.layer.hyp{background:#fff;border:1.5px dashed var(--hyp-line)}
+.layer.hyp .lh{color:var(--hyp)}
+.cite{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:5px;background:#E2E5E9;font-size:11px;font-weight:700;color:#3C4753;margin-left:3px;vertical-align:2px;cursor:pointer;padding:0 4px}
+.cite:hover{background:var(--text);color:#fff}
+.quote{font-size:13.5px;color:#3C4753;border-left:3px solid #D5D9DE;padding:4px 0 4px 10px;margin-top:10px}
+.feat-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.ro{border-radius:var(--radius-sm);padding:16px 18px;background:#fff;border:1px solid var(--line)}
+.ro h4{margin:0 0 8px;display:flex;align-items:center;gap:8px;font-size:15px}
+.ro ul{margin:0;padding-left:18px}
+.ro li{margin:5px 0}
+.ro.risk h4{color:var(--risk)} .ro.opp h4{color:var(--opp)}
+.actions{background:#fff;border-radius:var(--radius-sm);padding:16px 18px;margin-top:14px;border:1px solid var(--line)}
+.actions h4{margin:0 0 10px;font-size:15px}
+.check{display:flex;gap:10px;align-items:flex-start;padding:6px 0}
+.check input{margin-top:3px;accent-color:var(--red);width:16px;height:16px}
+.offer{display:flex;gap:16px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px 18px;margin-top:14px}
+.offer .tag{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.offer b{display:block;margin:2px 0}
+.offer span{font-size:13.5px;color:var(--muted)}
+.offer .btn{margin-left:auto;flex:none}
+.basis{background:#fff;border-radius:var(--radius-sm);padding:16px 18px;margin-top:14px;border:1px solid var(--line)}
+.basis h4{margin:0 0 6px;font-size:15px}
+.src{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line2)}
+.src:last-of-type{border-bottom:0}
+.src .n{width:22px;height:22px;border-radius:6px;background:#E2E5E9;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+.src b{font-size:14px}
+.src .tier{font-size:11px;font-weight:700;border-radius:5px;padding:1px 6px;margin-left:6px}
+.t-A{background:#E6F6EE;color:var(--opp)} .t-B{background:#E8F2FF;color:#1C5DB8} .t-C{background:var(--hyp-soft);color:var(--hyp)} .t-D{background:#F1F2F4;color:#56616E} .t-R{background:var(--red-soft);color:var(--red-dark)}
+.src .qt{font-size:13px;color:#3C4753;margin-top:4px}
+.src .lnk{font-size:13px;color:#1C5DB8;text-decoration:none;font-weight:500}
+.feedback{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:18px}
+.feedback .lbl{color:var(--muted);font-size:14px;margin-right:4px}
+.fb{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;font-size:14px;font-weight:500}
+.fb.on{background:var(--text);color:#fff;border-color:var(--text)}
+
+/* chat */
+.chat{background:#fff;border-radius:var(--radius);display:flex;flex-direction:column;position:sticky;top:88px;max-height:calc(100vh - 108px)}
+.chat-h{padding:16px 18px;border-bottom:1px solid var(--line2)}
+.chat-h b{display:flex;align-items:center;gap:8px}
+.chat-h span{font-size:12.5px;color:var(--muted)}
+.chat-body{padding:14px 16px;overflow:auto;flex:1;min-height:200px}
+.msg{margin-bottom:12px;max-width:92%;font-size:14px}
+.msg.me{margin-left:auto;background:#0B1F35;color:#fff;border-radius:14px 14px 4px 14px;padding:10px 12px}
+.msg.bot{background:#F5F6F7;border-radius:14px 14px 14px 4px;padding:12px}
+.msg.bot .ml{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 3px}
+.msg.bot .ml:first-child{margin-top:0}
+.msg.bot .ml.f{color:#3C4753} .msg.bot .ml.b{color:var(--red-dark)} .msg.bot .ml.a{color:var(--ai)} .msg.bot .ml.h{color:var(--hyp)}
+.msg.bot .dis{font-size:11.5px;color:var(--muted);margin-top:8px;border-top:1px solid #E4E6E8;padding-top:6px}
+.sugg{display:flex;flex-direction:column;gap:6px;padding:0 16px 10px}
+.sugg button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;font-size:13px;text-align:left}
+.sugg button:hover{border-color:var(--text)}
+.chat-in{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line2)}
+.chat-in input{flex:1;height:42px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#F8F9FA;outline:none}
+.chat-in button{width:42px;height:42px;border-radius:10px;border:0;background:var(--red);color:#fff}
+.typing{display:inline-flex;gap:4px}
+.typing i{width:6px;height:6px;border-radius:50%;background:#9AA4AE;animation:b 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes b{0%,80%,100%{opacity:.3}40%{opacity:1}}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(11,31,53,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal{background:#fff;border-radius:20px;max-width:720px;width:100%;max-height:88vh;overflow:auto;padding:26px}
+.modal h2{margin:0 0 4px;font-size:21px}
+.modal .sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+.step{display:grid;grid-template-columns:28px 1fr;gap:12px;padding:10px 0;position:relative}
+.step .num{width:28px;height:28px;border-radius:50%;background:#F1F2F4;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700}
+.step.ok .num{background:var(--opp-soft);color:var(--opp)}
+.step.warn .num{background:var(--hyp-soft);color:var(--hyp)}
+.step b{display:block;font-size:14.5px}
+.step code{font-size:12.5px;background:#F5F6F7;border-radius:6px;padding:2px 6px;color:#3C4753}
+.step .d{font-size:13.5px;color:#3C4753;margin-top:3px}
+.step .m{font-size:12px;color:var(--muted);margin-top:3px}
+
+/* sources page */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.tabs button{border:0;background:none;padding:10px 14px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--text);border-color:var(--red);font-weight:600}
+.tbl{width:100%;border-collapse:collapse;background:#fff;border-radius:var(--radius);overflow:hidden}
+.tbl th{text-align:left;font-size:12.5px;color:var(--muted);font-weight:600;padding:12px 16px;border-bottom:1px solid var(--line);background:#FAFBFB}
+.tbl td{padding:13px 16px;border-bottom:1px solid var(--line2);font-size:14px;vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.status-ok{color:var(--opp);font-weight:600;font-size:13px}
+.ingest{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.pipe{margin-top:14px}
+.pipe .ps{display:flex;gap:10px;align-items:center;padding:6px 0;font-size:14px;color:var(--muted)}
+.pipe .ps .ic{width:20px;height:20px;border-radius:50%;border:2px solid #D5D9DE;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px}
+.pipe .ps.run{color:var(--text);font-weight:600}
+.pipe .ps.run .ic{border-color:var(--red);border-top-color:transparent;animation:spin .8s linear infinite}
+.pipe .ps.done{color:var(--text)}
+.pipe .ps.done .ic{border-color:var(--opp);background:var(--opp);color:#fff}
+@keyframes spin{to{transform:rotate(360deg)}}
+.result{margin-top:14px;border-radius:14px;background:#F5F6F7;padding:16px}
+.result .kv{display:flex;justify-content:space-between;font-size:14px;padding:4px 0}
+
+/* settings */
+.set-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--line2)}
+.set-row:last-child{border-bottom:0}
+.set-row .t b{display:block}
+.set-row .t span{font-size:13px;color:var(--muted)}
+.toggle{position:relative;width:44px;height:26px;flex:none}
+.toggle input{opacity:0;width:0;height:0}
+.toggle span{position:absolute;inset:0;background:#D5D9DE;border-radius:20px;transition:.2s;cursor:pointer}
+.toggle span:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle input:checked+span{background:var(--red)}
+.toggle input:checked+span:before{transform:translateX(18px)}
+.set-row select{height:40px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:#fff}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0B1F35;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.demo-banner{background:#FFF7E0;color:#7A5300;font-size:12.5px;padding:7px 28px;border-bottom:1px solid #F3DDA0}
+
+@media (max-width:1100px){
+  .feed-layout,.detail-layout{grid-template-columns:1fr}
+  .chat{position:static;max-height:none}
+}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr}
+  .side{position:fixed;left:0;top:0;z-index:40;transform:translateX(-100%);transition:.2s;width:260px;box-shadow:0 0 40px rgba(0,0,0,.15)}
+  .side.open{transform:none}
+  .menu-btn{display:block}
+  .top{padding:0 16px}
+  .content{padding:18px 16px}
+  .proto-pill,.user-chip .nm{display:none}
+  .switcher-btn{max-width:170px}
+  .top{gap:8px}
+  .top-right{gap:8px}
+  .top-right .icon-btn{display:none}
+  .top-right .btn-ghost{padding:0 10px}
+  .hero-insight{grid-template-columns:1fr}
+  .hero-side{align-items:flex-start}
+  .two,.ingest{grid-template-columns:1fr}
+  .auth-card{padding:28px 22px}
+  .tbl{display:block;overflow-x:auto}
+  .demo-banner{padding:7px 16px}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+/* =========================================================
+   ДЕМО-ДАННЫЕ. Компании синтетические (в кейсе данные обезличены),
+   тексты инсайтов — примеры того, что формирует агент.
+   Ничего не отправляется на сервер: вход, код и чат работают локально.
+   ========================================================= */
+
+const ROLES = {
+  owner:{name:'Собственник', boost:{commodity:3, macro:3, regulation:2, demand:2, rate:1, logistics:1}},
+  ceo:{name:'Генеральный директор', boost:{demand:3, logistics:3, labor:2, regulation:2, rate:1}},
+  cfo:{name:'Финансовый директор', boost:{rate:3, labor:2, regulation:2, bonds:1, logistics:1, commodity:1}},
+  treasury:{name:'Руководитель казначейства', boost:{bonds:3, rate:3, commodity:1}},
+  accountant:{name:'Главный бухгалтер', boost:{regulation:3, labor:2}}
+};
+
+const COMPANIES = {
+  agro:{id:'agro', name:'ООО «СеверАгро»', short:'СА', okved:'01.11 · Выращивание зерновых культур', revenue:'24,6 млрд ₽', workers:'1 001–5 000', age:'более 10 лет', region:'Краснодарский край', products:['РКО','Кредиты','Лизинг','Зарплатный проект'], ved:'нет данных ФТС', group:'Группа «Север»',
+    counterparties:['Покупатель: оптовая торговля зерном (46.21) — 44% входящих платежей','Поставщик: производство удобрений (20.15) — 31% исходящих']},
+  logistics:{id:'logistics', name:'АО «ТрансЛогик»', short:'ТЛ', okved:'52.29 · Транспортная обработка грузов, экспедирование', revenue:'38,2 млрд ₽', workers:'501–1 000', age:'5–10 лет', region:'Москва', products:['РКО','Гарантии','Факторинг'], ved:'ФТС: Китай', group:'Группа «Север»',
+    counterparties:['Покупатель: ООО «СеверАгро» (группа) — 18% входящих','Поставщик: ж/д перевозки (49.20) — 37% исходящих']},
+  retail:{id:'retail', name:'ООО «МаркетПлюс»', short:'МП', okved:'47.11 · Розничная торговля продуктами', revenue:'61,3 млрд ₽', workers:'более 5 000', age:'более 10 лет', region:'Санкт-Петербург', products:['РКО','Депозиты','Зарплатный проект'], ved:'нет данных ФТС', group:'—',
+    counterparties:['Поставщик: оптовая торговля продуктами (46.39) — 52% исходящих']},
+  gold:{id:'gold', name:'АО «ЗолотоРесурс»', short:'ЗР', okved:'07.29 · Добыча руд драгоценных металлов', revenue:'52,8 млрд ₽', workers:'1 001–5 000', age:'более 10 лет', region:'Магаданская область', products:['РКО','Кредиты','Депозиты'], ved:'экспортные операции', group:'—',
+    counterparties:['Поставщик: аренда горной техники (77.32) — 22% исходящих']}
+};
+
+const USERS = {
+  anna:{id:'anna', login:'a.volkova', full:'Волкова Анна Сергеевна', call:'Анна Сергеевна', ini:'АВ', gender:'f', age:41, mode:'compact',
+    companies:[{id:'agro', role:'cfo'},{id:'logistics', role:'cfo'}]},
+  sergey:{id:'sergey', login:'s.orlov', full:'Орлов Сергей Петрович', call:'Сергей Петрович', ini:'СО', gender:'m', age:63, mode:'detailed',
+    companies:[{id:'gold', role:'owner'},{id:'agro', role:'owner'}]},
+  marina:{id:'marina', login:'m.kim', full:'Ким Марина Олеговна', call:'Марина Олеговна', ini:'МК', gender:'f', age:36, mode:'compact',
+    companies:[{id:'retail', role:'treasury'}]}
+};
+
+/* События: факты (из внешних источников) + позиция банка (из Альфа Ресерч), общие для всех компаний */
+const EVENTS = {
+  rate:{topic:'rate', type:'Денежно-кредитная политика', date:'11 сен 2026', title:'Банк России сохранил ключевую ставку на уровне 14%', conf:'confirmed',
+    fact:'11 сентября 2026 года совет директоров Банка России сохранил ключевую ставку на уровне 14% годовых. Это первая пауза в цикле смягчения после десяти последовательных снижений, начавшегося в июне 2025 года.',
+    sources:[{n:'Банк России, пресс-релиз', tier:'A', q:'«…принял решение сохранить ключевую ставку на уровне 14% годовых»'},{n:'Федеральное информагентство', tier:'B', q:'«…первая пауза после десяти снижений ставки подряд»'}],
+    bank:{doc:'Ключевая ставка ЦБ РФ: ставка без изменения на 14,0%, риторика стала жестче', date:'12 сен 2026', text:'Регулятор взял паузу, а риторика стала жёстче. Аналитики банка не ждут быстрого возобновления снижения ставки.', q:'«…ставка без изменения на 14,0%, риторика стала жестче»'}},
+  gold:{topic:'commodity', type:'Сырьевые рынки', date:'2 сен 2026', title:'Цены на золото удерживаются вблизи максимумов', conf:'confirmed',
+    fact:'По итогам августа цена золота оставалась вблизи исторических максимумов на фоне устойчивого спроса.',
+    sources:[{n:'Биржевые данные', tier:'A', q:'«…котировки золота по итогам месяца…»'}],
+    bank:{doc:'Обзор рынка золота, август 2026', date:'1 сен 2026', text:'Аналитики банка разбирают баланс спроса и предложения: спрос инвесторов и центральных банков поддерживает цену.', q:'«…спрос со стороны центральных банков…»'}},
+  consumption:{topic:'demand', type:'Потребительский спрос', date:'5 сен 2026', title:'Рост потребительской активности замедляется с высокой базы', conf:'confirmed',
+    fact:'Оборот розничной торговли продолжает расти, но темпы роста снижаются по сравнению с началом года.',
+    sources:[{n:'Росстат, оперативные данные', tier:'A', q:'«…оборот розничной торговли…»'},{n:'Деловое издание', tier:'B', q:'«…темпы роста замедлились…»'}],
+    bank:{doc:'Потребление на пике', date:'28 авг 2026', text:'Аналитики банка считают, что потребление находится на пиковых уровнях, и пространство для дальнейшего ускорения ограничено.', q:'«Потребление на пике»'}},
+  labor:{topic:'labor', type:'Рынок труда', date:'3 сен 2026', title:'Рынок труда не охлаждается', conf:'confirmed',
+    fact:'Безработица остаётся на исторически низком уровне, рост номинальных зарплат сохраняется.',
+    sources:[{n:'Росстат, макростатистика', tier:'A', q:'«…уровень безработицы…»'}],
+    bank:{doc:'Макростатистика 7М26: данные по рынку труда не подтверждают охлаждения экономики', date:'2 сен 2026', text:'По оценке аналитиков банка, данные по рынку труда не подтверждают охлаждения экономики — дефицит кадров сохраняется.', q:'«…данные по рынку труда не подтверждают охлаждения экономики»'}},
+  bonds:{topic:'bonds', type:'Долговой рынок', date:'13 сен 2026', title:'Доходности ОФЗ выросли после сигнала регулятора', conf:'confirmed',
+    fact:'После решения по ставке доходности ОФЗ на среднем и длинном участке кривой выросли.',
+    sources:[{n:'Московская биржа', tier:'A', q:'«…доходность ОФЗ…»'}],
+    bank:{doc:'Бонд Бриф: итоги недели', date:'14 сен 2026', text:'В еженедельном обзоре аналитики банка связывают рост доходностей с жёсткой риторикой регулятора.', q:'«…итоги недели на долговом рынке…»'}},
+  commod:{topic:'commodity', type:'Сырьевые рынки', date:'9 сен 2026', title:'Цены на зерно и удобрения движутся разнонаправленно', conf:'confirmed',
+    fact:'Мировые цены на пшеницу снизились за месяц, цены на азотные удобрения выросли.',
+    sources:[{n:'Биржевые данные', tier:'A', q:'«…котировки пшеницы…»'}],
+    bank:{doc:'Commodities performance', date:'8 сен 2026', text:'В обзоре динамики сырьевых товаров аналитики банка отмечают расхождение агросырья и удобрений.', q:'«Commodities performance»'}},
+  gdp:{topic:'macro', type:'Макроэкономика', date:'20 авг 2026', title:'Рост ВВП в первом полугодии оказался слабым', conf:'confirmed',
+    fact:'По предварительной оценке, рост ВВП в первом полугодии 2026 года оказался ниже ожиданий.',
+    sources:[{n:'Росстат, оценка ВВП', tier:'A', q:'«…ВВП в I полугодии…»'}],
+    bank:{doc:'Макростатистика 1П26: слабый рост 1П26 смещает прогноз роста ВВП на 0,1% за год', date:'21 авг 2026', text:'Аналитики банка скорректировали прогноз роста ВВП за год после слабого первого полугодия.', q:'«…слабый рост 1П26 смещает прогноз роста ВВП на 0,1% за год»'}},
+  rail:{topic:'logistics', type:'Логистика', date:'16 сен 2026', title:'Обсуждается пересмотр тарифов на ж/д перевозку зерна', conf:'single',
+    fact:'Участники рынка обсуждают возможный пересмотр тарифов на железнодорожную перевозку зерна. Решение не принято.',
+    sources:[{n:'Отраслевой портал', tier:'C', q:'«…обсуждается возможный пересмотр тарифов…»'}], bank:null},
+  ved:{topic:'regulation', type:'Регулирование ВЭД', date:'15 сен 2026', title:'Меняются требования к документам по внешнеторговым контрактам', conf:'confirmed',
+    fact:'Опубликованы изменения в требованиях к подтверждающим документам по внешнеторговым контрактам. Вступают в силу с 1 января 2027 года.',
+    sources:[{n:'Официальный правовой портал', tier:'A', q:'«…вступает в силу с 1 января 2027 года»'},{n:'Федеральное информагентство', tier:'B', q:'«…изменения затронут импортные контракты…»'}], bank:null}
+};
+
+/* Инсайты = событие × компания. Факт и позиция банка берутся из события дословно, меняются только выводы. */
+const INSIGHTS = [
+  {id:'agro-rate', c:'agro', e:'rate', impact:'risk', prio:'high', horizon:'3–6 мес',
+    h:'Стоимость вашего долга не снизится в ближайшие месяцы',
+    t:'Пауза ЦБ и жёсткая риторика: процентные расходы по кредитам и лизингу остаются высокими, а оборотка к посевной — дорогой.',
+    why:['Кредитные продукты','Лизинг','01.11: сезонная потребность в оборотке'],
+    concl:'Для СеверАгро пауза означает, что финансовая нагрузка не снизится в ближайшей перспективе. Если часть кредитов с плавающей ставкой, расходы на обслуживание останутся на текущем уровне, а финансирование посевной и закупки удобрений обойдётся дороже, чем при продолжении цикла снижения.',
+    hyp:'Если снижение ставки возобновится позже, чем заложено в бюджет, может понадобиться пересмотреть план капвложений на следующий сезон.',
+    risks:['Процентные расходы выше бюджетных','Дорогое финансирование оборотки к посевной'],
+    opps:['Зафиксировать стоимость части долга до следующего решения ЦБ'],
+    acts:['Сверить долю долга с плавающей ставкой','Пересчитать процентные расходы при ставке 14% до конца года','Проверить график выборки кредитных линий под сезон'],
+    qs:['Какой сценарий по ставке заложен в бюджет 2027?'],
+    offer:{t:'Консультация по управлению процентным риском', d:'Фиксация ставки по кредитной линии, процентный своп'}},
+  {id:'agro-rail', c:'agro', e:'rail', impact:'risk', prio:'medium', horizon:'6–12 мес',
+    h:'Логистика урожая может подорожать — пока это только обсуждение',
+    t:'Если ж/д тарифы на зерно пересмотрят, ваш ключевой покупатель может переложить рост издержек в закупочную цену.',
+    why:['01.11: зерно','44% входящих платежей — оптовик зерна (46.21)','Регион: Краснодарский край'],
+    concl:'Для СеверАгро прямого роста расходов нет, но 44% выручки идёт через одного покупателя-трейдера, чья маржа зависит от ж/д логистики. Повышение тарифов может давить на закупочные цены.',
+    hyp:'Если повышение тарифов утвердят до уборочной, покупатель может предложить пересмотр цены или базиса поставки.',
+    risks:['Давление на закупочную цену','Концентрация выручки на одном покупателе'],
+    opps:['Переговоры о базисе поставки заранее'],
+    acts:['Проверить базис поставки в договорах с покупателями','Отслеживать официальное решение — сейчас информация из одного источника'],
+    qs:['Есть ли в договоре с покупателем оговорка о пересмотре цены?']},
+  {id:'agro-labor', c:'agro', e:'labor', impact:'risk', prio:'medium', horizon:'6–12 мес',
+    h:'Давление на фонд оплаты труда сохранится к сезону',
+    t:'Рынок труда остаётся напряжённым: найм сезонного персонала и удержание механизаторов будут стоить дороже.',
+    why:['Зарплатный проект','01.11: сезонный найм','1 001–5 000 сотрудников'],
+    concl:'При численности более тысячи человек и сезонном найме рост зарплат по рынку напрямую влияет на себестоимость урожая.',
+    hyp:'Если дефицит кадров сохранится, к следующему сезону может понадобиться индексация выше плановой.',
+    risks:['Рост ФОТ выше плана','Нехватка сезонного персонала'],
+    opps:['Удержание за счёт нематериальных бонусов'],
+    acts:['Сравнить плановую индексацию с рыночной динамикой','Заранее спланировать сезонный найм'],
+    qs:['Какая доля ФОТ приходится на сезонный персонал?']},
+  {id:'agro-commod', c:'agro', e:'commod', impact:'neutral', prio:'low', horizon:'1–3 мес',
+    h:'Зерно дешевеет, удобрения дорожают: маржа следующего сезона под давлением',
+    t:'Разнонаправленная динамика сужает разницу между ценой продажи и затратами на удобрения.',
+    why:['01.11: зерно','31% исходящих платежей — производитель удобрений (20.15)'],
+    concl:'Для СеверАгро сочетание падающей цены продажи и растущих затрат на ключевой ресурс сужает маржу.',
+    hyp:'Если тенденция продолжится до весны, ранняя закупка удобрений может оказаться выгоднее.',
+    risks:['Сужение маржи'], opps:['Ранняя закупка удобрений'],
+    acts:['Сравнить условия ранней закупки удобрений'], qs:['Какая доля удобрений законтрактована на следующий сезон?']},
+  {id:'logistics-rate', c:'logistics', e:'rate', impact:'risk', prio:'high', horizon:'3–6 мес',
+    h:'Факторинг и гарантии останутся дорогими',
+    t:'Стоимость факторинга привязана к уровню ставок — длинная дебиторка продолжит дорого стоить.',
+    why:['Факторинг','Банковские гарантии'],
+    concl:'ТрансЛогик финансирует кассовые разрывы через факторинг. При ставке 14% стоимость этого финансирования не снизится, а значит, длинные отсрочки клиентам остаются дорогими.',
+    hyp:'Если ставка останется на текущем уровне до конца года, имеет смысл пересмотреть условия отсрочки для крупнейших клиентов.',
+    risks:['Высокая стоимость финансирования дебиторки'], opps:['Пересмотр условий отсрочки платежа'],
+    acts:['Посчитать стоимость дебиторки по ключевым клиентам','Проверить условия по действующим гарантиям'],
+    qs:['Какие клиенты дают самую длинную отсрочку?'],
+    offer:{t:'Пересчёт условий факторинга', d:'Сравнение лимитов и ставок по текущему портфелю'}},
+  {id:'logistics-ved', c:'logistics', e:'ved', impact:'risk', prio:'high', horizon:'до 1 янв 2027',
+    h:'Новые требования к документам по ВЭД: проверьте контракты с Китаем',
+    t:'С 1 января 2027 меняются требования к подтверждающим документам. У компании есть внешнеторговые операции с Китаем.',
+    why:['ФТС: Китай','Внешнеторговые операции'],
+    concl:'Если в действующих контрактах с китайскими партнёрами не предусмотрены новые документы, после 1 января платежи могут задерживаться на проверке.',
+    hyp:'Если контрагенты не успеют подготовить документы в новом формате, часть платежей в январе может уйти на доработку.',
+    risks:['Задержки платежей по импорту','Доработка контрактов'], opps:['Обновить шаблон контракта заранее'],
+    acts:['Сверить перечень документов в контрактах с Китаем','Предупредить контрагентов о новых требованиях'],
+    qs:['Сколько действующих контрактов переходит через 1 января?'],
+    offer:{t:'Консультация валютного контроля', d:'Проверка контрактов под новые требования'}},
+  {id:'logistics-rail', c:'logistics', e:'rail', impact:'opp', prio:'medium', horizon:'6–12 мес',
+    h:'Рост ж/д тарифов может перенаправить часть грузов к экспедиторам',
+    t:'Пока это обсуждение. Если тарифы вырастут, клиенты будут искать оптимизацию логистики — спрос на экспедирование может вырасти.',
+    why:['52.29: экспедирование','37% исходящих — ж/д перевозки (49.20)'],
+    concl:'Для ТрансЛогик это и риск (рост себестоимости), и возможность (спрос на оптимизацию маршрутов).',
+    hyp:'Если повышение утвердят, клиенты-агропроизводители могут чаще запрашивать мультимодальные решения.',
+    risks:['Рост себестоимости ж/д плеча'], opps:['Спрос на оптимизацию маршрутов'],
+    acts:['Подготовить расчёт альтернативных маршрутов для ключевых клиентов'], qs:['Какая доля выручки зависит от ж/д перевозок?']},
+  {id:'retail-consumption', c:'retail', e:'consumption', impact:'risk', prio:'high', horizon:'3–6 мес',
+    h:'Рост продаж может замедлиться: потребление на пике',
+    t:'Банк считает, что потребление на пиковых уровнях. Для продуктового ритейла это сигнал к осторожному плану роста.',
+    why:['47.11: продуктовый ритейл','Более 5 000 сотрудников'],
+    concl:'Для МаркетПлюс замедление потребительского спроса может сказаться на росте среднего чека, особенно в непродовольственных категориях.',
+    hyp:'Если спрос замедлится, покупатели могут смещаться в более дешёвые категории и собственные марки.',
+    risks:['Замедление роста выручки','Снижение среднего чека'], opps:['Развитие собственной торговой марки'],
+    acts:['Проверить план продаж на сценарий замедления','Проанализировать структуру среднего чека'],
+    qs:['Какой рост LFL заложен в план?']},
+  {id:'retail-bonds', c:'retail', e:'bonds', impact:'opp', prio:'medium', horizon:'1–3 мес',
+    h:'Доходности выросли: размещение свободной ликвидности стало выгоднее',
+    t:'Рост доходностей на долговом рынке повышает доходность консервативных инструментов размещения.',
+    why:['Депозитные продукты','Нет кредитной нагрузки'],
+    concl:'У МаркетПлюс нет кредитов и есть депозиты, поэтому жёсткая политика для компании скорее плюс: доход от размещения остаётся высоким.',
+    hyp:'Если ставка будет снижаться медленно, более длинное размещение может зафиксировать текущую доходность.',
+    risks:['Процентный риск при длинном размещении'], opps:['Фиксация доходности на более длинный срок'],
+    acts:['Сверить график платежей поставщикам с горизонтом размещения'],
+    qs:['Какой минимальный неснижаемый остаток нужен для операционной деятельности?'],
+    offer:{t:'Депозит с фиксированной ставкой', d:'Размещение на срок под ваш платёжный календарь'}},
+  {id:'retail-rate', c:'retail', e:'rate', impact:'opp', prio:'medium', horizon:'3–6 мес',
+    h:'Высокие ставки по размещению сохранятся дольше',
+    t:'Пауза ЦБ — хороший сигнал для компании без долга: доход по депозитам не снизится в ближайшие месяцы.',
+    why:['Депозитные продукты','Нет кредитной нагрузки'],
+    concl:'Для МаркетПлюс сохранение ставки означает, что процентный доход от размещения останется на текущем уровне.',
+    hyp:'Если цикл снижения возобновится в начале года, окно для фиксации текущих ставок может закрыться.',
+    risks:['Реинвестирование по более низким ставкам позже'], opps:['Фиксация ставки сейчас'],
+    acts:['Оценить, какую часть ликвидности можно разместить на срок'], qs:[]},
+  {id:'retail-labor', c:'retail', e:'labor', impact:'risk', prio:'medium', horizon:'6–12 мес',
+    h:'Конкуренция за персонал магазинов сохранится',
+    t:'Рынок труда не охлаждается — текучесть и рост зарплат в рознице останутся высокими.',
+    why:['Зарплатный проект','Более 5 000 сотрудников'],
+    concl:'При численности более 5 000 человек рост зарплат по рынку заметно влияет на операционные расходы сети.',
+    hyp:'Если дефицит сохранится, может понадобиться ускорить автоматизацию касс и склада.',
+    risks:['Рост ФОТ','Текучесть персонала'], opps:['Автоматизация'], acts:['Сравнить индексацию ФОТ с рыночной'], qs:[]},
+  {id:'gold-gold', c:'gold', e:'gold', impact:'opp', prio:'high', horizon:'3–6 мес',
+    h:'Высокие цены на золото поддерживают вашу выручку',
+    t:'Цена золота у максимумов, банк видит устойчивый спрос. Для добытчика это поддержка выручки и окно для планирования.',
+    why:['07.29: добыча драгметаллов','Экспортные операции'],
+    concl:'Для ЗолотоРесурс текущая цена поддерживает выручку и денежный поток. Это момент, когда можно планировать капвложения, опираясь на сильный денежный поток.',
+    hyp:'Если цена скорректируется, часть выручки можно защитить заранее — вопрос для анализа, а не рекомендация.',
+    risks:['Волатильность цены','Курсовой риск по экспорту'], opps:['Сильный денежный поток для капвложений'],
+    acts:['Оценить чувствительность бюджета к цене золота','Проверить долю продаж с фиксированной ценой'],
+    qs:['При какой цене проект расширения остаётся окупаемым?'],
+    offer:{t:'Консультация по управлению ценовым риском', d:'Инструменты защиты выручки от снижения цены'}},
+  {id:'gold-rate', c:'gold', e:'rate', impact:'risk', prio:'medium', horizon:'3–6 мес',
+    h:'Кредиты останутся дорогими: проверьте план капвложений',
+    t:'При высокой ставке проекты на заёмные деньги дороже. Сильный денежный поток от золота частично компенсирует это.',
+    why:['Кредитные продукты','Депозитные продукты'],
+    concl:'У ЗолотоРесурс есть и кредиты, и депозиты: ставка увеличивает стоимость долга, но и доход от размещения.',
+    hyp:'Если капвложения финансировать из собственного потока, а не кредитами, стоимость проекта может снизиться.',
+    risks:['Стоимость заёмного финансирования'], opps:['Финансирование за счёт собственного денежного потока'],
+    acts:['Сравнить стоимость кредита и доход по депозитам'], qs:[]},
+  {id:'gold-gdp', c:'gold', e:'gdp', impact:'neutral', prio:'low', horizon:'6–12 мес',
+    h:'Экономика растёт слабо, но для экспортёра золота это не главный фактор',
+    t:'Банк скорректировал прогноз ВВП. Выручка компании зависит от мировой цены золота больше, чем от внутреннего спроса.',
+    why:['07.29: добыча драгметаллов','Экспортные операции'],
+    concl:'Для ЗолотоРесурс слабый внутренний рост влияет косвенно — через стоимость подрядчиков и курс рубля.',
+    hyp:'Если ослабление экономики приведёт к ослаблению рубля, рублёвая выручка экспортёра может вырасти.',
+    risks:['Косвенное влияние через подрядчиков'], opps:['Курсовой эффект для экспортёра'], acts:['Отслеживать курс как ключевой драйвер'], qs:[]}
+];
+
+/* ---------- state ---------- */
+const S = {screen:'login', user:null, company:null, page:'home', insightId:null, filter:'all', mode:'compact',
+  fb:{}, chat:{}, roleOverride:{}, muted:{}, digest:'push', srcTab:'research', pendingUser:'anna'};
+
+const $ = (s,el=document)=>el.querySelector(s);
+const esc = s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function roleFor(cid){ if(S.roleOverride[cid]) return S.roleOverride[cid]; const l=S.user.companies.find(x=>x.id===cid); return l?l.role:'cfo'; }
+function currentRole(){ return S.company==='group' ? roleFor(S.user.companies[0].id) : roleFor(S.company); }
+function companyIds(){ return S.company==='group' ? S.user.companies.map(c=>c.id) : [S.company]; }
+
+function score(ins, role){
+  const pw={high:6, medium:3, low:1}[ins.prio];
+  const ev=EVENTS[ins.e];
+  const rb=(ROLES[role].boost[ev.topic]||0);
+  const fb=S.fb[ins.id]==='no'?-10:S.fb[ins.id]==='yes'?1:0;
+  return pw+rb*1.5+fb;
+}
+function feed(){
+  const ids=companyIds();
+  let list=INSIGHTS.filter(i=>ids.includes(i.c) && !S.muted[EVENTS[i.e].topic]);
+  if(S.company==='group'){
+    const byEv={};
+    list.forEach(i=>{ const r=roleFor(i.c); const sc=score(i,r);
+      if(!byEv[i.e] || sc>byEv[i.e].sc){ byEv[i.e]={i, sc, also:(byEv[i.e]?byEv[i.e].also:[])}; }
+      byEv[i.e].also = Array.from(new Set([...(byEv[i.e].also||[]), i.c])); });
+    return Object.values(byEv).sort((a,b)=>b.sc-a.sc).map(x=>({...x.i, affects:x.also}));
+  }
+  const r=currentRole();
+  return list.map(i=>({...i, sc:score(i,r)})).sort((a,b)=>b.sc-a.sc);
+}
+function filtered(){
+  return feed().filter(i=>{
+    if(S.filter==='risk') return i.impact==='risk';
+    if(S.filter==='opp') return i.impact==='opp';
+    if(S.filter==='bank') return !!EVENTS[i.e].bank;
+    return true; });
+}
+function greet(){ const h=new Date().getHours(); return h<12?'Доброе утро':h<18?'Добрый день':'Добрый вечер'; }
+
+const IC = {
+  home:'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  ins:'<path d="M12 3v2M5.6 5.6l1.4 1.4M3 12h2m14 0h2m-3.4-6.4L16.2 7M9 18h6m-5 3h4M12 7a5 5 0 0 0-3 9h6a5 5 0 0 0-3-9z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  acc:'<rect x="3" y="6" width="18" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.8"/>',
+  pay:'<path d="M5 12h14m-5-5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  doc:'<path d="M7 3h7l5 5v13H7z M14 3v5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  cred:'<path d="M4 20V10m5 10V6m5 14v-8m5 8V4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  ved:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+  src:'<path d="M4 5h16M4 12h16M4 19h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  set:'<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9 7 7m10 10 2.1 2.1M4.9 19.1 7 17m10-10 2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  bell:'<path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  menu:'<path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  send:'<path d="M4 12 20 4l-6 16-2-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>'
+};
+const svg=(k,s=20)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true">${IC[k]}</svg>`;
+
+/* ---------- render: auth ---------- */
+function renderLogin(){
+  const u=USERS[S.pendingUser];
+  return `<div class="auth"><div class="auth-card">
+    <div class="brand"><div class="brand-mark">А</div><div>Бизнес Онлайн<small>Прототип для хакатона · данные демо</small></div></div>
+    <h1>Вход в интернет-банк</h1><p class="sub">Логин и пароль физического лица</p>
+    <div class="field"><label>Логин</label><input id="lg" value="${esc(u.login)}" autocomplete="off"></div>
+    <div class="field"><label>Пароль</label><input id="pw" type="password" value="demo-demo" autocomplete="off"></div>
+    <button class="btn btn-primary btn-block" data-act="login">Войти</button>
+    <div class="demo-users"><h4>Тестовые учётные записи</h4>
+      ${Object.values(USERS).map(x=>`<button class="demo-user ${x.id===S.pendingUser?'sel':''}" data-act="pick" data-id="${x.id}">
+        <div class="ava">${x.ini}</div><div><b>${esc(x.full)}</b><span>${x.companies.map(c=>ROLES[c.role].name+' · '+COMPANIES[c.id].name).join(' / ')}</span></div></button>`).join('')}
+    </div>
+    <p class="note">Прототип работает локально: логин, пароль и код никуда не отправляются.</p>
+  </div></div>`;
+}
+function renderSms(){
+  return `<div class="auth"><div class="auth-card">
+    <div class="brand"><div class="brand-mark">А</div><div>Бизнес Онлайн<small>Прототип для хакатона · данные демо</small></div></div>
+    <h1>Подтвердите вход</h1><p class="sub">Код отправлен на +7 ••• •••-••-12</p>
+    <div class="field"><label>Код из SMS</label><input id="code" value="" placeholder="Любые 4 цифры" maxlength="6" inputmode="numeric"></div>
+    <button class="btn btn-primary btn-block" data-act="sms">Подтвердить</button>
+    <p class="note">Демо: подойдёт любой код.</p>
+  </div></div>`;
+}
+function countFor(cid){ return INSIGHTS.filter(i=>i.c===cid && i.prio!=='low').length; }
+function renderOrgs(){
+  const u=S.user;
+  return `<div class="auth"><div class="auth-card" style="max-width:520px">
+    <div class="brand"><div class="brand-mark">А</div><div>Бизнес Онлайн<small>Прототип для хакатона · данные демо</small></div></div>
+    <h1>Выберите организацию</h1><p class="sub">${esc(u.call)}, у вас доступ к ${u.companies.length} компаниям</p>
+    ${u.companies.map(c=>{const co=COMPANIES[c.id];return `<button class="org" data-act="org" data-id="${c.id}"><div class="ava">${co.short}</div><div><b>${esc(co.name)}</b><span>${ROLES[c.role].name} · ${co.okved.split(' · ')[1]}</span></div><span class="count">${countFor(c.id)} инсайта</span></button>`}).join('')}
+    ${u.companies.length>1?`<button class="org" data-act="org" data-id="group"><div class="ava">Гр</div><div><b>Все компании</b><span>Общая лента без дублей событий</span></div></button>`:''}
+  </div></div>`;
+}
+
+/* ---------- shell ---------- */
+function compLabel(){
+  if(S.company==='group') return {n:'Все компании', r:S.user.companies.length+' организации'};
+  const co=COMPANIES[S.company]; return {n:co.name, r:ROLES[roleFor(S.company)].name};
+}
+function renderShell(inner){
+  const cl=compLabel(); const n=feed().filter(i=>i.prio==='high').length;
+  const nav=[['home','Главная','home'],['ins','Инсайты','ins'],['acc','Счета','acc'],['pay','Платежи','pay'],['doc','Выписки и документы','doc'],['cred','Кредиты','cred'],['ved','ВЭД','ved']];
+  return `<div class="app">
+  <aside class="side" id="side">
+    <div class="brand"><div class="brand-mark">А</div><div>Бизнес Онлайн<small>прототип</small></div></div>
+    <nav class="nav">
+      ${nav.map(([k,l,ic])=>{const pg=k==='ins'?'insights':k; const act=(S.page===pg||(k==='ins'&&S.page==='insight'))?'active':'';
+        return `<a class="${act}" data-nav="${pg}">${svg(ic)}<span>${l}</span>${k==='ins'?`<span class="ai-tag">AI</span>${n?`<span class="badge">${n}</span>`:''}`:''}</a>`}).join('')}
+      <div style="height:14px"></div>
+      <a class="${S.page==='sources'?'active':''}" data-nav="sources">${svg('src')}<span>Источники и пул</span></a>
+      <a class="${S.page==='settings'?'active':''}" data-nav="settings">${svg('set')}<span>Настройки инсайтов</span></a>
+    </nav>
+    <div class="side-foot">Все данные демонстрационные. Не является инвестиционной рекомендацией.</div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <button class="menu-btn" data-act="menu" aria-label="Меню">${svg('menu',24)}</button>
+      <div class="switcher"><button class="switcher-btn" data-act="sw"><div class="ava" style="border-radius:9px;background:#F1F2F4">${S.company==='group'?'Гр':COMPANIES[S.company].short}</div><div style="min-width:0"><b>${esc(cl.n)}</b><span>${esc(cl.r)}</span></div><span style="color:#9AA4AE">▾</span></button>
+        <div class="dropdown hidden" id="dd">
+          ${S.user.companies.map(c=>`<button data-act="setco" data-id="${c.id}"><div class="ava" style="border-radius:9px;background:#F1F2F4">${COMPANIES[c.id].short}</div><div><b>${esc(COMPANIES[c.id].name)}</b><span>${ROLES[roleFor(c.id)].name}</span></div></button>`).join('')}
+          ${S.user.companies.length>1?`<button data-act="setco" data-id="group"><div class="ava" style="border-radius:9px;background:#F1F2F4">Гр</div><div><b>Все компании</b><span>Объединённая лента</span></div></button>`:''}
+        </div></div>
+      <div class="top-right">
+        <span class="proto-pill">Прототип · хакатон</span>
+        <button class="icon-btn" aria-label="Уведомления">${svg('bell')}</button>
+        <div class="user-chip"><div class="ava">${S.user.ini}</div><span class="nm">${esc(S.user.call)}</span></div>
+        <button class="btn btn-ghost btn-sm" data-act="logout">Выйти</button>
+      </div>
+    </header>
+    ${['insights','insight','sources','settings'].includes(S.page)?`<div class="demo-banner">Демо-данные: компании синтетические, тексты — примеры работы агента. В продукте факты и позиции банка извлекаются из источников и материалов Альфа Ресерч.</div>`:''}
+    <main class="content">${inner}</main>
+  </div></div>`;
+}
+
+/* ---------- chips ---------- */
+const impactChip=i=>i.impact==='risk'?'<span class="chip risk"><span class="dot"></span>Риск</span>':i.impact==='opp'?'<span class="chip opp"><span class="dot"></span>Возможность</span>':'<span class="chip neutral"><span class="dot"></span>Нейтрально</span>';
+const bankChip=e=>e.bank?'<span class="chip bank">Есть позиция Альфа Ресерч</span>':'<span class="chip nobank">Аналитики банка нет</span>';
+const confChip=e=>e.conf==='confirmed'?'<span class="chip conf-ok">✓ Подтверждено</span>':'<span class="chip conf-one">Один источник</span>';
+const prioLbl={high:'Высокий приоритет', medium:'Средний приоритет', low:'Низкий приоритет'};
+
+/* ---------- home ---------- */
+function renderHome(){
+  const f=feed(); const top=f[0]; const ev=top?EVENTS[top.e]:null;
+  const risks=f.filter(i=>i.impact==='risk').length, opps=f.filter(i=>i.impact==='opp').length;
+  const co=S.company==='group'?null:COMPANIES[S.company];
+  const accs=S.company==='group'
+    ? S.user.companies.map(c=>[COMPANIES[c.id].name,'Расчётный счёт ₽ ··· '+(4800+c.id.length*7),(120+c.id.length*31)+' 417 220,50 ₽'])
+    : [['Расчётный счёт ₽','··· 4821','184 320 517,40 ₽'],['Депозит','до 15.12.2026','250 000 000,00 ₽']].concat(S.company==='logistics'?[['Валютный счёт CNY','··· 0917','12 840 300,00 ¥']]:[]);
+  return `
+  <h1 class="page-title">${greet()}, ${esc(S.user.call)}</h1>
+  <p class="page-sub">${co?esc(co.name):'Все компании'} · ${new Date().toLocaleDateString('ru-RU',{day:'numeric',month:'long'})}</p>
+  ${top?`<div class="hero-insight">
+    <div><div class="kicker"><span class="chip ai">AI</span>Инсайт дня для вас · ${ROLES[S.company==='group'?roleFor(top.c):currentRole()].name}</div>
+      <h2>${esc(top.h)}</h2><p>${esc(top.t)}</p>
+      <div class="row">${impactChip(top)}${bankChip(ev)}<span class="chip plain">${esc(ev.type)}</span></div></div>
+    <div class="hero-side"><div class="row" style="justify-content:flex-end">${risks?`<span class="chip risk">Рисков: ${risks}</span>`:''}${opps?`<span class="chip opp">Возможностей: ${opps}</span>`:''}</div>
+      <div class="row"><button class="btn btn-secondary btn-sm" data-open="${top.id}">Подробнее</button><button class="btn btn-primary btn-sm" data-nav="insights">Все инсайты · ${f.length}</button></div></div>
+  </div>`:''}
+  <div class="section-h"><h3>Счета</h3></div>
+  <div class="accounts">${accs.map(a=>`<div class="acc"><span>${esc(a[0])} ${esc(a[1])}</span><b>${a[2]}</b></div>`).join('')}</div>
+  <div class="section-h"><h3>Быстрые действия</h3></div>
+  <div class="quick"><button>${svg('pay')}Новый платёж</button><button>${svg('doc')}Выписка</button><button>${svg('ved')}Валютный перевод</button><button data-nav="insights">${svg('ins')}Инсайты</button></div>
+  <div class="section-h"><h3>Последние операции</h3></div>
+  <div class="card"><table class="ops">
+    <tr><td>Оплата по счёту № 1182, поставщик</td><td>−4 820 000,00 ₽</td></tr>
+    <tr><td>Поступление от покупателя</td><td style="color:var(--opp)">+12 300 000,00 ₽</td></tr>
+    <tr><td>Заработная плата, реестр № 17</td><td>−38 450 120,00 ₽</td></tr>
+    <tr><td>Проценты по депозиту</td><td style="color:var(--opp)">+2 911 233,00 ₽</td></tr></table></div>`;
+}
+
+/* ---------- feed ---------- */
+function briefText(f){
+  const r=S.company==='group'?null:currentRole();
+  const hi=f.filter(i=>i.prio==='high');
+  if(!hi.length) return 'Сегодня значимых для вас событий нет. Мы показываем только то, что связано с вашими компаниями.';
+  const parts=hi.slice(0,3).map(i=>i.h.charAt(0).toLowerCase()+i.h.slice(1));
+  return 'Главное на сегодня'+(r?' для роли «'+ROLES[r].name+'»':'')+': '+parts.join('; ')+'.';
+}
+function renderInsights(){
+  const f=filtered(); const all=feed();
+  const co=S.company==='group'?null:COMPANIES[S.company];
+  return `<h1 class="page-title">Инсайты</h1>
+  <p class="page-sub">События, которые влияют на ${co?esc(co.name):'ваши компании'}, — и что они значат для вас</p>
+  <div class="feed-layout"><div>
+    <div class="brief"><div class="kicker"><span class="chip ai">AI</span>Утренний бриф · сформирован AI на основе событий ниже</div><p>${esc(briefText(all))}</p></div>
+    <div class="toolbar">
+      ${[['all','Все'],['risk','Риски'],['opp','Возможности'],['bank','С аналитикой банка']].map(([k,l])=>`<button class="filter ${S.filter===k?'on':''}" data-filter="${k}">${l}</button>`).join('')}
+      <div style="margin-left:auto" class="seg"><button class="${S.mode==='compact'?'on':''}" data-mode="compact">Компактно</button><button class="${S.mode==='detailed'?'on':''}" data-mode="detailed">Подробно</button></div>
+    </div>
+    ${f.length?f.map(i=>cardHtml(i)).join(''):'<div class="empty">По выбранному фильтру событий нет.</div>'}
+    <div class="disclaimer">Не является индивидуальной инвестиционной рекомендацией. Блоки «Вывод AI» и «Гипотеза» сформированы моделью; позиция Альфа-Банка приводится только из материалов Альфа Ресерч и помечена отдельно.</div>
+  </div>
+  <div>${profilePanel()}</div></div>`;
+}
+function cardHtml(i){
+  const ev=EVENTS[i.e];
+  const aff=i.affects&&i.affects.length>1?`<div class="affects">Затрагивает: ${i.affects.map(c=>COMPANIES[c].name).join(', ')}</div>`:(S.company==='group'?`<div class="affects">${COMPANIES[i.c].name}</div>`:'');
+  return `<div class="icard" data-open="${i.id}">
+    <div class="meta">${impactChip(i)}${bankChip(ev)}${confChip(ev)}</div>
+    <h3>${esc(i.h)}</h3>
+    <p>${esc(i.t)}</p>
+    ${S.mode==='detailed'?`<p style="margin-top:10px;color:var(--muted);font-size:.93em"><b style="color:var(--text)">Событие:</b> ${esc(ev.title)}. ${esc(ev.fact)}</p>`:''}
+    ${aff}
+    <div class="foot"><span><span class="prio prio-${i.prio}"></span>${prioLbl[i.prio]}</span><span>Горизонт: ${i.horizon}</span><span>${esc(ev.type)}</span><span>${ev.date}</span>${S.fb[i.id]==='yes'?'<span>✓ Вы отметили как полезное</span>':''}</div>
+  </div>`;
+}
+function profilePanel(){
+  const ids=companyIds();
+  return `<div class="card panel"><h4>Почему вы видите эти события</h4><p class="hint">Признаки компании, по которым агент отбирает и ранжирует события</p>
+  ${ids.map(id=>{const co=COMPANIES[id];return `<div style="margin-bottom:10px"><b style="font-size:14px">${esc(co.name)}</b>
+    <div class="feat"><span class="k">Отрасль</span><span>${esc(co.okved)}</span></div>
+    <div class="feat"><span class="k">Выручка</span><span>${co.revenue}</span></div>
+    <div class="feat"><span class="k">Продукты</span><span>${co.products.join(', ')}</span></div>
+    <div class="feat"><span class="k">Регион</span><span>${esc(co.region)}</span></div>
+    <div class="feat"><span class="k">ВЭД</span><span>${esc(co.ved)}</span></div>
+    <div class="feat"><span class="k">Контрагенты</span><span>${co.counterparties.map(esc).join('<br>')}</span></div>
+    <div class="feat"><span class="k">Ваша роль</span><span>${ROLES[roleFor(id)].name}</span></div></div>`}).join('')}
+  <button class="btn btn-secondary btn-sm btn-block" data-nav="settings">Уточнить профиль</button></div>`;
+}
+
+/* ---------- insight detail ---------- */
+function renderInsight(){
+  const i=INSIGHTS.find(x=>x.id===S.insightId); const ev=EVENTS[i.e]; const co=COMPANIES[i.c];
+  const n=ev.sources.length;
+  const bankIdx=n+1;
+  return `<button class="back" data-nav="insights">← Все инсайты</button>
+  <div class="detail-layout"><div>
+    <div class="card d-head">
+      <div class="row">${impactChip(i)}<span class="chip plain"><span class="prio prio-${i.prio}"></span>${prioLbl[i.prio]}</span><span class="chip plain">Горизонт: ${i.horizon}</span>${confChip(ev)}</div>
+      <h1>${esc(i.h)}</h1>
+      <div class="date">${esc(co.name)} · подача для роли «${ROLES[roleFor(i.c)].name}» · событие от ${ev.date}</div>
+
+      <div class="layer fact"><div class="lh">Факт · что произошло <span class="q">${esc(ev.type)}</span></div>
+        <p><b>${esc(ev.title)}.</b> ${esc(ev.fact)}${ev.sources.map((s,k)=>`<span class="cite" data-src="${k+1}">${k+1}</span>`).join('')}</p></div>
+
+      ${ev.bank?`<div class="layer bank"><div class="lh">Позиция Альфа-Банка · как это оценивает банк <span class="q">Альфа Ресерч · ${ev.bank.date}</span></div>
+        <p>${esc(ev.bank.text)}<span class="cite" data-src="${bankIdx}">${bankIdx}</span></p>
+        <div class="quote">${esc(ev.bank.q)} — «${esc(ev.bank.doc)}»</div></div>`
+      :`<div class="layer nobank"><div class="lh">⚠ Аналитика Альфа-Банка по этому событию отсутствует</div>
+        <p>Выводы ниже сформированы AI на основе внешних источников и данных о компании. Они не отражают позицию Альфа-Банка.</p></div>`}
+
+      <div class="layer ai"><div class="lh">Вывод AI · почему это важно для ${esc(co.name)} <span class="q">Сформировано AI</span></div>
+        <p>${esc(i.concl)}</p>
+        <div class="feat-chips">${i.why.map(w=>`<span class="chip plain">Признак: ${esc(w)}</span>`).join('')}</div></div>
+
+      <div class="two">
+        <div class="ro risk"><h4>Риски <span class="chip ai">AI</span></h4><ul>${i.risks.map(r=>`<li>${esc(r)}</li>`).join('')}</ul></div>
+        <div class="ro opp"><h4>Возможности <span class="chip ai">AI</span></h4><ul>${i.opps.map(r=>`<li>${esc(r)}</li>`).join('')}</ul></div>
+      </div>
+
+      <div class="layer hyp"><div class="lh">Гипотеза · как может развиваться ситуация <span class="q">Сценарий модели, не прогноз</span></div>
+        <p>${esc(i.hyp)}</p></div>
+
+      <div class="actions"><h4>Что можно сделать</h4>
+        ${i.acts.map(a=>`<label class="check"><input type="checkbox"><span>${esc(a)}</span></label>`).join('')}
+        ${i.qs.length?`<div style="margin-top:8px;font-size:14px;color:var(--muted)"><b style="color:var(--text)">Вопрос для анализа:</b> ${i.qs.map(esc).join(' ')}</div>`:''}
+      </div>
+
+      ${i.offer?`<div class="offer"><div><div class="tag">Предложение банка</div><b>${esc(i.offer.t)}</b><span>${esc(i.offer.d)}</span></div><button class="btn btn-secondary btn-sm" data-act="mgr">Обсудить с менеджером</button></div>`:''}
+
+      <div class="basis" id="basis"><h4>На чём основан вывод</h4>
+        ${ev.sources.map((s,k)=>`<div class="src" id="src${k+1}"><div class="n">${k+1}</div><div><b>${esc(s.n)}</b><span class="tier t-${s.tier}">Уровень ${s.tier}</span><div class="qt">${esc(s.q)}</div><a class="lnk" href="#" onclick="return false">Открыть первоисточник →</a></div></div>`).join('')}
+        ${ev.bank?`<div class="src" id="src${bankIdx}"><div class="n">${bankIdx}</div><div><b>${esc(ev.bank.doc)}</b><span class="tier t-R">Альфа Ресерч</span><div class="qt">${esc(ev.bank.q)}</div><a class="lnk" href="#" onclick="return false">Открыть материал →</a></div></div>`:''}
+        <div class="src"><div class="n">⌂</div><div><b>Данные о компании</b><div class="qt">${i.why.map(esc).join(' · ')}</div></div></div>
+        <button class="btn btn-secondary btn-sm" data-act="trace" style="margin-top:8px">Как получен вывод</button>
+      </div>
+
+      <div class="feedback"><span class="lbl">Инсайт был полезен?</span>
+        <button class="fb ${S.fb[i.id]==='yes'?'on':''}" data-fb="yes">👍 Полезно</button>
+        <button class="fb ${S.fb[i.id]==='no'?'on':''}" data-fb="no">Не про нас</button>
+        <button class="fb ${S.fb[i.id]==='err'?'on':''}" data-fb="err">Ошибка в фактах</button>
+        <button class="fb" data-act="share">Переслать коллеге</button>
+      </div>
+      <div class="disclaimer">Не является индивидуальной инвестиционной рекомендацией. Решения принимаются компанией самостоятельно.</div>
+    </div>
+  </div>
+  ${chatHtml(i)}</div>`;
+}
+
+/* ---------- chat ---------- */
+const SUGG={
+  rate:['Что будет, если ставку снизят в декабре?','Покажи для другой нашей компании','Где первоисточник?','Стоит ли рефинансироваться сейчас?'],
+  def:['Как это повлияет на нас через полгода?','Где первоисточник?','Что думает банк?','Покажи для другой нашей компании']
+};
+function chatHtml(i){
+  const h=S.chat[i.id]||[];
+  const sg=(SUGG[i.e]||SUGG.def);
+  return `<aside class="chat"><div class="chat-h"><b><span class="chip ai">AI</span>Спросить про это событие</b><span>Отвечает по материалам карточки и источникам</span></div>
+    <div class="chat-body" id="cb">${h.length?h.map(m=>m.me?`<div class="msg me">${esc(m.t)}</div>`:`<div class="msg bot">${m.html}</div>`).join(''):`<div class="msg bot"><div class="ml a">AI</div>Задайте уточняющий вопрос: другой сценарий, другая компания группы или первоисточник.</div>`}</div>
+    <div class="sugg">${sg.map(s=>`<button data-ask="${esc(s)}">${esc(s)}</button>`).join('')}</div>
+    <div class="chat-in"><input id="ci" placeholder="Ваш вопрос"><button data-act="ask" aria-label="Отправить">${svg('send',18)}</button></div></aside>`;
+}
+function answer(i, q){
+  const ev=EVENTS[i.e]; const ql=q.toLowerCase(); const dis='<div class="dis">Не является инвестиционной рекомендацией.</div>';
+  if(/источник|оригинал|откуда/.test(ql)){
+    return `<div class="ml f">Факт</div>${ev.sources.map((s,k)=>`[${k+1}] ${esc(s.n)} (уровень ${s.tier}): ${esc(s.q)}`).join('<br>')}`+(ev.bank?`<div class="ml b">Альфа Ресерч</div>«${esc(ev.bank.doc)}», ${ev.bank.date}`:`<div class="ml b">Альфа Ресерч</div>Материалов банка по этому событию нет.`);
+  }
+  if(/стоит ли|купить|продать|рефинанс|выгодно ли/.test(ql)){
+    return `<div class="ml a">AI</div>Я не даю прямых рекомендаций о сделках. Для решения важны: доля долга с плавающей ставкой, срок до погашения, стоимость досрочного погашения и ваш сценарий по ставке.`+(ev.bank?`<div class="ml b">Позиция банка</div>${esc(ev.bank.text)}`:'')+`<div class="ml a">Следующий шаг</div>Обсудить расчёт с вашим менеджером в банке.`+dis;
+  }
+  if(/компани|группы|другой/.test(ql)){
+    const other=S.user.companies.map(c=>c.id).filter(id=>id!==i.c);
+    if(!other.length) return `<div class="ml a">AI</div>У вас доступ только к ${esc(COMPANIES[i.c].name)}.`;
+    const oi=INSIGHTS.find(x=>x.c===other[0] && x.e===i.e);
+    if(!oi) return `<div class="ml a">AI</div>Для ${esc(COMPANIES[other[0]].name)} это событие не прошло порог значимости: в профиле компании нет признаков, через которые оно влияет на бизнес.`;
+    return `<div class="ml a">AI · ${esc(COMPANIES[oi.c].name)}</div><b>${esc(oi.h)}</b><br>${esc(oi.t)}<br><a href="#" data-open="${oi.id}" style="color:#1C5DB8">Открыть карточку →</a>`+dis;
+  }
+  if(/если|сценари|снизят|повыс|через/.test(ql)){
+    return `<div class="ml h">Гипотеза</div>${esc(i.hyp)}<div class="ml a">AI</div>Это условный сценарий модели на основе текущих фактов${ev.bank?' и позиции банка':''}, а не прогноз. Для точной оценки нужен расчёт по вашим кредитным договорам и бюджету.`+dis;
+  }
+  if(/банк|думает|позиц/.test(ql)){
+    return ev.bank?`<div class="ml b">Позиция Альфа-Банка</div>${esc(ev.bank.text)}<br><span style="color:var(--muted);font-size:12.5px">«${esc(ev.bank.doc)}», ${ev.bank.date}</span>`:`<div class="ml b">Позиция Альфа-Банка</div>Аналитики банка по этому событию нет. Всё, что я могу сказать, будет выводом AI по внешним источникам.`;
+  }
+  return `<div class="ml a">AI</div>В материалах по этому событию нет прямого ответа на вопрос. Могу показать, что известно из фактов, или передать вопрос менеджеру.`+dis;
+}
+function ask(q){
+  const i=INSIGHTS.find(x=>x.id===S.insightId); if(!q.trim()) return;
+  (S.chat[i.id]=S.chat[i.id]||[]).push({me:true,t:q}); render();
+  const cb=$('#cb'); cb.insertAdjacentHTML('beforeend','<div class="msg bot" id="tp"><span class="typing"><i></i><i></i><i></i></span></div>'); cb.scrollTop=cb.scrollHeight;
+  setTimeout(()=>{ S.chat[i.id].push({html:answer(i,q)}); render(); const c=$('#cb'); if(c) c.scrollTop=c.scrollHeight; },900);
+}
+
+/* ---------- trace modal ---------- */
+function traceModal(){
+  const i=INSIGHTS.find(x=>x.id===S.insightId); const ev=EVENTS[i.e]; const co=COMPANIES[i.c];
+  const steps=[
+    ['ok','План',`Тип события «${ev.type}» → нужны: профиль компании, контрагенты, позиция банка, связанные события за 30 дней.`,'GLM-5.3-Flash · 412 токенов'],
+    ['ok','get_company_profile('+co.id+')',`Признаки: ${i.why.join('; ')}.`,'0,04 c'],
+    ['ok','get_counterparties('+co.id+')',co.counterparties.join('; ')+'.','0,06 c'],
+    [ev.bank?'ok':'warn','search_research("'+ev.title.slice(0,40)+'…")',ev.bank?`Найден материал «${ev.bank.doc}» (${ev.bank.date}), фрагмент §2. Релевантность 0,91.`:'Материалов Альфа Ресерч не найдено → has_bank_research = false, добавлен дисклеймер.','RAG: BM25 + вектор + реранкер · 0,3 c'],
+    ['ok','Проверка фактов',`${ev.sources.length} источник(а), цитаты найдены в тексте дословно, числа совпадают. Уверенность: ${ev.conf==='confirmed'?'подтверждено':'один источник'}.`,'код + NLI'],
+    ['ok','Черновик инсайта','JSON по схеме: факт, '+(ev.bank?'позиция банка, ':'')+'вывод, гипотеза, риски, возможности, действия.','GLM-5.3-Flash · 1 840 токенов'],
+    ['warn','Критик · итерация 1','Утверждение «расходы вырастут на 15%» без источника → удалено. Запрошена переформулировка.','GLM-5.3-Flash · 690 токенов'],
+    ['ok','Критик · итерация 2','Все утверждения имеют доказательства, слои размечены верно, прямых советов нет. Вердикт: публиковать.','GLM-5.3-Flash · 520 токенов'],
+    ['ok','Подача под роль',`Роль «${ROLES[roleFor(i.c)].name}», режим «${S.mode==='compact'?'Компактно':'Подробно'}». Факт и позиция банка перенесены дословно.`,'Gemma 4 26B · 380 токенов']
+  ];
+  return `<div class="overlay" data-act="close"><div class="modal">
+    <h2>Как получен вывод</h2><p class="sub">Трасса агента · trace_id tr_${i.id.replace(/-/g,'_')} · все шаги журналируются</p>
+    ${steps.map((s,k)=>`<div class="step ${s[0]}"><div class="num">${s[0]==='ok'?'✓':'!'}</div><div><b>${k+1}. ${s[1].includes('(')?`<code>${esc(s[1])}</code>`:esc(s[1])}</b><div class="d">${esc(s[2])}</div><div class="m">${esc(s[3])}</div></div></div>`).join('')}
+    <div style="text-align:right;margin-top:14px"><button class="btn btn-secondary" data-act="close">Закрыть</button></div></div></div>`;
+}
+
+/* ---------- sources ---------- */
+const RESEARCH=[
+  ['Инфляция 25–31 августа: основные выводы','2 сен 2026','Инфляция'],
+  ['Бонд Бриф: итоги недели','14 сен 2026','Долговой рынок'],
+  ['Обзор рынка золота, август 2026','1 сен 2026','Сырьё'],
+  ['Тактический взгляд на 3-й квартал 2026 года: время собирать камни','15 июл 2026','Стратегия'],
+  ['Commodities performance','8 сен 2026','Сырьё'],
+  ['Ключевая ставка ЦБ РФ: ставка без изменения на 14,0%, риторика стала жестче','12 сен 2026','ДКП'],
+  ['Макростатистика 7М26: данные по рынку труда не подтверждают охлаждения экономики','2 сен 2026','Макро'],
+  ['Потребление на пике','28 авг 2026','Потребление'],
+  ['Макростатистика 1П26: слабый рост 1П26 смещает прогноз роста ВВП на 0,1% за год','21 авг 2026','Макро']
+];
+const REG=[
+  ['A','Первоисточники','Банк России, Минфин, ФНС, Росстат, Московская биржа, правовой портал, раскрытия эмитентов','Факт принимается сразу'],
+  ['B','Деловые СМИ','Федеральные информагентства и деловые издания','Принимается, ищем ссылку на первоисточник'],
+  ['C','Отраслевые','Отраслевые порталы и ассоциации — подбираются под ОКВЭД клиентов','Цифры — только с подтверждением A/B'],
+  ['D','Непроверенные','Telegram-каналы, агрегаторы','Только сигнал на поиск подтверждения']
+];
+function usedCount(doc){ const e=Object.values(EVENTS).find(x=>x.bank&&x.bank.doc===doc); if(!e) return 0; const key=Object.keys(EVENTS).find(k=>EVENTS[k]===e); return INSIGHTS.filter(i=>i.e===key).length; }
+function renderSources(){
+  return `<h1 class="page-title">Источники и пул материалов</h1>
+  <p class="page-sub">Откуда берутся факты и позиция банка. Каждый вывод в инсайте ссылается на материал отсюда.</p>
+  <div class="ingest">
+    <div class="card"><h3 style="margin:0 0 4px;font-size:17px">Разобрать новость по ссылке</h3><p class="page-sub" style="margin:0 0 12px;font-size:14px">Покажем весь путь: факты → цитаты → ваши компании → инсайт</p>
+      <div class="row" style="flex-wrap:nowrap"><input id="url" placeholder="https://… ссылка на новость" style="flex:1;height:44px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#F8F9FA;min-width:0"><button class="btn btn-primary btn-sm" style="height:44px" data-act="ingest">Разобрать</button></div>
+      <div id="pipe"></div></div>
+    <div class="card"><h3 style="margin:0 0 4px;font-size:17px">Добавить материал Альфа Ресерч</h3><p class="page-sub" style="margin:0 0 12px;font-size:14px">PDF обзора: текст, таблицы и графики извлекаются постранично</p>
+      <label class="btn btn-secondary btn-sm" style="cursor:pointer">Выбрать PDF<input type="file" accept=".pdf" hidden data-act="pdf"></label>
+      <div id="pdfres" class="note"></div></div>
+  </div>
+  <div class="tabs"><button class="${S.srcTab==='research'?'on':''}" data-tab="research">Альфа Ресерч · ${RESEARCH.length}</button><button class="${S.srcTab==='ext'?'on':''}" data-tab="ext">Внешние источники</button></div>
+  ${S.srcTab==='research'?`<table class="tbl"><tr><th>Материал</th><th>Тема</th><th>Дата</th><th>В инсайтах</th><th>Статус</th></tr>
+    ${RESEARCH.map(r=>`<tr><td><b>${esc(r[0])}</b></td><td>${r[2]}</td><td style="white-space:nowrap">${r[1]}</td><td>${usedCount(r[0])}</td><td class="status-ok">Обработан</td></tr>`).join('')}</table>`
+  :`<table class="tbl"><tr><th>Уровень</th><th>Тип</th><th>Примеры</th><th>Правило использования</th></tr>
+    ${REG.map(r=>`<tr><td><span class="tier t-${r[0]}" style="font-size:12px;font-weight:700;border-radius:5px;padding:2px 8px">${r[0]}</span></td><td><b>${r[1]}</b></td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</table>`}`;
+}
+function runIngest(){
+  const steps=['Сбор страницы и сохранение оригинала','Очистка от меню и рекламы','Поиск дублей и склейка с событием','Классификация: тип события, ОКВЭД, регион','Извлечение фактов с цитатами','Проверка цитат и чисел','Сопоставление с вашими компаниями','Поиск позиции Альфа Ресерч'];
+  const el=$('#pipe'); let k=0;
+  const draw=()=>{ el.innerHTML='<div class="pipe">'+steps.map((s,j)=>`<div class="ps ${j<k?'done':j===k?'run':''}"><span class="ic">${j<k?'✓':''}</span>${s}</div>`).join('')+'</div>'; };
+  draw();
+  const t=setInterval(()=>{ k++; draw(); if(k>=steps.length){ clearInterval(t);
+    const names=companyIds().map(id=>COMPANIES[id].name).join(', ');
+    el.insertAdjacentHTML('beforeend',`<div class="result">
+      <div class="kv"><span>Извлечено фактов</span><b>4</b></div>
+      <div class="kv"><span>Подтверждено цитатой</span><b style="color:var(--opp)">3</b></div>
+      <div class="kv"><span>Отброшено</span><b style="color:var(--risk)">1 — число не найдено в тексте</b></div>
+      <div class="kv"><span>Затрагивает</span><b>${esc(names)}</b></div>
+      <div class="kv"><span>Позиция Альфа Ресерч</span><b style="color:var(--hyp)">не найдена → дисклеймер</b></div>
+      <p class="note" style="margin:8px 0 0">Демо: в продукте здесь появляется готовый инсайт в ленте.</p></div>`); } },550);
+}
+
+/* ---------- settings ---------- */
+function renderSettings(){
+  const u=S.user;
+  const topics=[['rate','Ставки и денежно-кредитная политика'],['commodity','Сырьевые рынки'],['demand','Потребительский спрос'],['labor','Рынок труда'],['bonds','Долговой рынок'],['logistics','Логистика'],['regulation','Регулирование и ВЭД'],['macro','Макроэкономика']];
+  return `<h1 class="page-title">Настройки инсайтов</h1><p class="page-sub">Что и как вам показывать. Факты и позиция банка от этих настроек не меняются.</p>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">
+  <div class="card"><h3 style="margin:0 0 6px;font-size:17px">Роль в компаниях</h3>
+    ${u.companies.map(c=>`<div class="set-row"><div class="t"><b>${esc(COMPANIES[c.id].name)}</b><span>Влияет на отбор и подачу</span></div>
+      <select data-role="${c.id}">${Object.entries(ROLES).map(([k,r])=>`<option value="${k}" ${roleFor(c.id)===k?'selected':''}>${r.name}</option>`).join('')}</select></div>`).join('')}
+  </div>
+  <div class="card"><h3 style="margin:0 0 6px;font-size:17px">Формат подачи</h3>
+    <div class="set-row"><div class="t"><b>Режим</b><span>Подобран автоматически, можно изменить</span></div>
+      <div class="seg"><button class="${S.mode==='compact'?'on':''}" data-mode="compact">Компактно</button><button class="${S.mode==='detailed'?'on':''}" data-mode="detailed">Подробно</button></div></div>
+    <div class="set-row"><div class="t"><b>Обращение</b><span>${esc(u.call)}</span></div></div>
+    <div class="set-row"><div class="t"><b>Дайджест</b><span>Push только для высокого приоритета</span></div>
+      <select data-act="digest"><option ${S.digest==='push'?'selected':''} value="push">В банке + push</option><option ${S.digest==='mail'?'selected':''} value="mail">В банке + email</option><option ${S.digest==='bank'?'selected':''} value="bank">Только в банке</option></select></div>
+    <p class="note">Возраст и пол используются только для обращения и плотности подачи по умолчанию. На выбор событий и выводы они не влияют.</p>
+  </div>
+  <div class="card"><h3 style="margin:0 0 6px;font-size:17px">Темы</h3>
+    ${topics.map(([k,l])=>`<div class="set-row"><div class="t"><b>${l}</b></div><label class="toggle"><input type="checkbox" data-topic="${k}" ${S.muted[k]?'':'checked'}><span></span></label></div>`).join('')}
+  </div>
+  <div class="card"><h3 style="margin:0 0 6px;font-size:17px">Какие данные используются</h3>
+    ${['Отрасль (ОКВЭД) и масштаб','Банковские продукты компании','Регион и ВЭД','Контрагенты по платежам (агрегированно)','Связи внутри группы компаний'].map(l=>`<div class="set-row"><div class="t"><b>${l}</b></div><label class="toggle"><input type="checkbox" checked><span></span></label></div>`).join('')}
+    <p class="note">В языковую модель передаются только агрегированные признаки, без реквизитов и персональных данных.</p>
+  </div></div>`;
+}
+
+function renderStub(){
+  const t={acc:'Счета',pay:'Платежи',doc:'Выписки и документы',cred:'Кредиты',ved:'ВЭД'}[S.page];
+  return `<h1 class="page-title">${t}</h1><p class="page-sub">Раздел интернет-банка — в прототипе не реализован</p>
+  <div class="empty">Здесь стандартный функционал банка. Сервис «Инсайты» встраивается в него как отдельный раздел и виджет на главной.<br><br><button class="btn btn-primary btn-sm" data-nav="insights">Перейти к инсайтам</button></div>`;
+}
+
+/* ---------- render & events ---------- */
+let modal=false;
+function render(){
+  document.body.classList.toggle('detailed', S.mode==='detailed' && S.screen==='app');
+  const R=$('#root');
+  if(S.screen==='login') R.innerHTML=renderLogin();
+  else if(S.screen==='sms') R.innerHTML=renderSms();
+  else if(S.screen==='orgs') R.innerHTML=renderOrgs();
+  else {
+    const p=S.page;
+    const inner=p==='home'?renderHome():p==='insights'?renderInsights():p==='insight'?renderInsight():p==='sources'?renderSources():p==='settings'?renderSettings():renderStub();
+    R.innerHTML=renderShell(inner)+(modal?traceModal():'');
+  }
+}
+function toast(t){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(),2200); }
+function go(page){ S.page=page; modal=false; render(); window.scrollTo(0,0); }
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act],[data-nav],[data-open],[data-filter],[data-mode],[data-fb],[data-ask],[data-tab],[data-src]');
+  if(!t){ const dd=$('#dd'); if(dd && !e.target.closest('.switcher')) dd.classList.add('hidden'); return; }
+  const a=t.dataset;
+  if(a.nav){ e.preventDefault(); $('#side')&&$('#side').classList.remove('open'); go(a.nav); return; }
+  if(a.open){ e.preventDefault(); S.insightId=a.open; const ins=INSIGHTS.find(x=>x.id===a.open); if(S.company!=='group' && ins.c!==S.company) S.company=ins.c; go('insight'); return; }
+  if(a.filter){ S.filter=a.filter; render(); return; }
+  if(a.mode){ S.mode=a.mode; render(); return; }
+  if(a.tab){ S.srcTab=a.tab; render(); return; }
+  if(a.src){ const el=$('#src'+a.src); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.background='#FFF7E0'; setTimeout(()=>el.style.background='',1400);} return; }
+  if(a.fb){ S.fb[S.insightId]=a.fb; render();
+    toast(a.fb==='yes'?'Спасибо! Будем показывать больше похожего':a.fb==='no'?'Понятно, такие события будут ниже в ленте':'Отправлено эксперту на проверку. До проверки инсайт скрыт для других'); return; }
+  if(a.ask){ ask(a.ask); return; }
+  switch(a.act){
+    case 'pick': S.pendingUser=a.id; render(); break;
+    case 'login': S.screen='sms'; render(); setTimeout(()=>$('#code')&&$('#code').focus(),50); break;
+    case 'sms': S.user=USERS[S.pendingUser]; S.mode=S.user.mode; S.roleOverride={}; S.fb={}; S.chat={};
+      if(S.user.companies.length>1){ S.screen='orgs'; } else { S.company=S.user.companies[0].id; S.screen='app'; S.page='home'; } render(); break;
+    case 'org': S.company=a.id; S.screen='app'; S.page='home'; render(); break;
+    case 'sw': $('#dd').classList.toggle('hidden'); break;
+    case 'setco': S.company=a.id; if(S.page==='insight') S.page='insights'; render(); break;
+    case 'logout': S.screen='login'; S.user=null; render(); break;
+    case 'menu': $('#side').classList.toggle('open'); break;
+    case 'trace': modal=true; render(); break;
+    case 'close': if(t.classList.contains('overlay') && e.target!==t) break; modal=false; render(); break;
+    case 'ask': ask($('#ci').value); break;
+    case 'mgr': toast('Запрос менеджеру отправлен (демо)'); break;
+    case 'share': toast('Ссылка на инсайт скопирована (демо)'); break;
+    case 'ingest': runIngest(); break;
+  }
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.dataset.role){ S.roleOverride[t.dataset.role]=t.value; render(); toast('Роль обновлена — лента пересчитана'); }
+  if(t.dataset.topic){ S.muted[t.dataset.topic]=!t.checked; }
+  if(t.dataset.act==='digest'){ S.digest=t.value; }
+  if(t.dataset.act==='pdf' && t.files[0]){ const r=$('#pdfres'); r.textContent='«'+t.files[0].name+'» загружен. Демо: в продукте файл разбирается постранично и появляется в списке материалов.'; }
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter' && e.target.id==='ci') ask(e.target.value);
+  if(e.key==='Enter' && e.target.id==='code') document.querySelector('[data-act="sms"]').click();
+  if(e.key==='Escape' && modal){ modal=false; render(); }
+});
+render();
+</script>
+</body>
+</html>
