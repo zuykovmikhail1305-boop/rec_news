@@ -4,3 +4,4 @@ sqlalchemy==2.0.35
 httpx==0.28.1
 selectolax==0.3.34
 trafilatura==2.0.0
+

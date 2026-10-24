@@ -9,10 +9,10 @@ os.environ["DATABASE_URL"] = "invalid-parser-url://must-not-be-used"
 from sqlalchemy import inspect
 from starlette.requests import Request
 from starlette.responses import Response
-from web_app.main import app
-from web_app import models, routes
-from web_app.auth import create_access_token
-from web_app.database import engine, SessionLocal
+from backend.main import app
+from backend import models, routes
+from backend.auth import create_access_token
+from backend.database import engine, SessionLocal
 
 
 def request(token=None):
