@@ -9,38 +9,52 @@ services:
       - db-volume:/var/lib/postgresql
     ports:
       - "5432:5432"
-  # nginx:
-  #   build: ./services/nginx
-  #   ports:
-  #     # - 80:80
-  #     - 443:443
-  #   secrets:
-  #     - ssl_cert
-  #     - ssl_key
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"   # Порт для работы брокера
+      - "15672:15672" # Веб-панель управления RabbitMQ (http://localhost:15672)
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
   backend:
-    build: ./services/web
+    build:
+      context: ./services/backend
+      dockerfile: Dockerfile
     ports:
-      - 8000:8000
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - rabbitmq
+
   parser:
-    build: ./services/parser
-    # expose:
-    #   - 8001
+    build:
+      context: ./services/parser
+      dockerfile: Dockerfile
     ports:
-      - 8001:8001
+      - "8001:8001"
+    depends_on:
+      - rabbitmq
+
   ml:
-    build: ./services/ml
+    build:
+      context: ./services/ml
+      dockerfile: Dockerfile
     ports:
-      - 8002:8002
-    env_file: ./.secrets/ml.env
+      - "8002:8002"
+    env_file:
+      - ./.secrets/ml.env
     volumes:
       - embedding-volume:/usr/src/app/models
+
 secrets:
   db_password:
     file: ./.secrets/db_password
-  # ssl_cert:
-  #   file: ./secrets/fullchain.pem
-  # ssl_key:
-  #   file: ./secrets/privkey.pem
+
 volumes:
   db-volume:
   embedding-volume:
+  rabbitmq-data:
