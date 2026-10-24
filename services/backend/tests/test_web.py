@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from backend.auth import COOKIE, _session
 from backend.main import app
 from backend.ml_client import (MLClient, MLUnavailable, Profile, ProfileDetails,
-                               ProfileList, ProfileNotFound, get_ml_client)
+                               ProfileList, ProfileNotFound, UserFeed, get_ml_client)
 
 
 PROFILES = {
@@ -33,6 +33,16 @@ class FakeML:
         return ProfileDetails(user_id=user_id, profile=PROFILES[user_id],
             company_facts=[{"text": "Учебный факт о компании", "origin": "анкета"}],
             activity={"feed_status": "ready", "feed_total": 7, "insight_cards": 2})
+
+    def feed(self, user_id, limit=20, offset=0):
+        if self.unavailable:
+            raise MLUnavailable("offline")
+        return UserFeed(user_id=user_id, status="not_computed", items=[])
+
+    def latest_job(self, user_id):
+        if self.unavailable:
+            raise MLUnavailable("offline")
+        raise ProfileNotFound()
 
 
 class DemoAuthTests(unittest.TestCase):

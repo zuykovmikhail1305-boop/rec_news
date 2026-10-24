@@ -3,9 +3,12 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from routes import router
+if __package__:
+    from .routes import router
+else:
+    from routes import router
 
-app = FastAPI(title="rec_news — демо-вход", version="0.2.0")
+app = FastAPI(title="Бизнес Онлайн — инсайты", version="0.3.0")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(router)
 

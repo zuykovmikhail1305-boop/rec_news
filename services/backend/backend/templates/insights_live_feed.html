@@ -1,0 +1,25 @@
+{% if feed_error %}<div class="demo-alert" role="alert">{{ feed_error }}</div>{% endif %}
+{% if job %}<div class="generation-state" role="status">
+{% if job.status in ['queued','running'] %}<span class="generation-dot"></span><b>Готовим инсайты</b> <span>Готово {{ job.done }} из {{ job.total }}</span>
+{% elif job.status == 'done' %}<b>Подготовка завершена</b><span>{{ job.done }} карточек{% if job.failed %}, не удалось подготовить {{ job.failed }}{% endif %}</span>
+{% elif job.status == 'failed' %}<b>Не удалось подготовить карточки</b><span>Можно повторить подготовку кнопкой «Обновить».</span>
+{% elif job.status == 'cancelled' %}<b>Подготовка остановлена</b><span>Готовые карточки доступны ниже.</span>{% endif %}
+</div>{% endif %}
+{% if feed and feed.status == 'not_computed' %}<div class="card empty-state"><h3>Лента пока не подготовлена</h3><p>После подбора новостей здесь появятся события для вашей компании.</p></div>
+{% elif feed and feed.items %}
+<p class="feed-count">Всего событий: {{ feed.total }} · показаны {{ offset+1 }}–{{ offset + feed.items|length }}</p>
+<div class="insight-feed">{% for item in feed.items %}
+<article class="card insight-preview">
+<div class="insight-meta"><span>{{ item.source or 'Новость' }}</span>{% if item.published_at %}<time>{{ item.published_at|local_date }}</time>{% endif %}
+{% if item.insight %}<span class="insight-tag i-{{ item.insight.impact }}">{{ {'risk':'Риск','opportunity':'Возможность','neutral':'Нейтрально'}.get(item.insight.impact, 'Инсайт') }}</span>{% if item.insight.status != 'ready' %}<span class="insight-tag">{{ 'Частично подготовлен' if item.insight.status == 'partial' else 'Упрощённый режим' }}</span>{% endif %}{% endif %}</div>
+<h3><a href="/insights/{{ item.news_id|path_id }}">{{ item.insight.headline if item.insight and item.insight.headline else item.title }}</a></h3>
+{% if item.insight and item.insight.headline %}<p class="insight-news-title">{{ item.title }}</p>{% endif %}
+<p>{{ item.why_relevant or item.lead }}</p>
+<div class="insight-preview-footer">{% if item.analytics %}<span class="insight-tag i-bank">Есть аналитика Альфа-Банка</span>{% endif %}
+{% if item.insight %}<a class="insight-open" href="/insights/{{ item.news_id|path_id }}">Открыть инсайт →</a>
+{% elif item_states.get(item.news_id) == 'failed' %}<span class="insight-wait">Карточку не удалось подготовить</span>
+{% elif item_states.get(item.news_id) == 'cancelled' %}<span class="insight-wait">Подготовка отменена</span>
+{% else %}<a class="insight-wait" href="/insights/{{ item.news_id|path_id }}">Карточка готовится →</a>{% endif %}</div>
+</article>{% endfor %}</div>
+<nav class="profile-pager" aria-label="Страницы инсайтов">{% if offset > 0 %}<a href="/?offset={{ [0,offset-20]|max }}">← Предыдущие</a>{% endif %}{% if offset+20 < feed.total %}<a href="/?offset={{ offset+20 }}">Следующие →</a>{% endif %}</nav>
+{% elif feed %}<div class="card empty-state"><h3>Пока нет событий</h3><p>Для выбранного профиля ещё нет подобранных новостей.</p></div>{% endif %}
