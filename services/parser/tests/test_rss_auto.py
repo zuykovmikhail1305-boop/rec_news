@@ -140,3 +140,15 @@ class AutoPollTests(unittest.TestCase):
                 self.assertEqual(reason, 'not_due_or_busy')
             finally:
                 engine.dispose()
+
+    def test_cbr_rss_file_urls_normalize_and_queue(self):
+        from parser_app.adapters import normalize_url
+        url = "https://www.cbr.ru/press/PR/?file=23102026_133000key.htm"
+        normalized = "https://www.cbr.ru/press/pr/?file=23102026_133000key.htm"
+        config = RSSConfig(True, {'cbr':'https://www.cbr.ru/rss/RssPress'}, 300, 100, 15)
+        result = self.poll(lambda r:httpx.Response(200,content=fixtures.rss([url,normalized])), config=config)
+        self.assertEqual(result['new'], 1)
+        self.assertEqual(normalize_url(url), normalized)
+        for bad in ('../secret.htm','https://evil.test/a.htm','a.htm/b','a.htm&file=b.htm','a.htm&id=1'):
+            with self.assertRaises(ValueError):
+                normalize_url('https://www.cbr.ru/press/pr/?file=' + bad)
