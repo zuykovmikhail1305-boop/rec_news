@@ -6,6 +6,7 @@ from celery.signals import worker_process_init
 from kombu import Exchange, Queue
 
 from .database import engine
+from .rss import rss_config
 
 exchange = Exchange("rec_news.parser", type="direct", durable=True)
 celery_app = Celery("rec_news.parser", broker=os.getenv(
@@ -15,7 +16,8 @@ celery_app.conf.update(
     task_queues=(Queue("parser.publications", exchange, routing_key="parser.publications", durable=True),
                  Queue("parser.dispatch", exchange, routing_key="parser.dispatch", durable=True)),
     task_routes={"parser.collect": {"queue": "parser.publications", "routing_key": "parser.publications"},
-                 "parser.dispatch_pending": {"queue": "parser.dispatch", "routing_key": "parser.dispatch"}},
+                 "parser.dispatch_pending": {"queue": "parser.dispatch", "routing_key": "parser.dispatch"},
+                 "parser.poll_rss": {"queue": "parser.dispatch", "routing_key": "parser.dispatch"}},
     task_default_queue="parser.publications", task_default_delivery_mode="persistent",
     task_create_missing_queues=False,
     task_serializer="json", accept_content=["json"], result_serializer="json",
@@ -40,3 +42,11 @@ celery_app.conf.update(
 def reset_pool(**kwargs):
     # Prefork children must not share database connections with the parent.
     engine.dispose(close=False)
+
+
+rss = rss_config()
+if rss.enabled and rss.sources:
+    celery_app.conf.beat_schedule["parser-rss-discovery"] = {
+        "task": "parser.poll_rss", "schedule": float(rss.interval),
+        "options": {"queue": "parser.dispatch", "routing_key": "parser.dispatch", "expires": rss.interval},
+    }

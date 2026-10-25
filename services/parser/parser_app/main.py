@@ -120,3 +120,9 @@ def get_job(job_id: int, db: Session = Depends(get_db)):
     if item is None:
         raise HTTPException(404, "Задача не найдена")
     return job_result(item)
+
+
+@app.get("/rss/status", summary="Состояние автоматического опроса RSS-источников")
+def rss_status(db: Session = Depends(get_db)):
+    from .rss import poll_status
+    return {"feeds": poll_status(db)}

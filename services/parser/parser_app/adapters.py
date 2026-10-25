@@ -54,12 +54,24 @@ class SourceAdapter:
                 or parsed.username or parsed.password or parsed.port not in {None, 443}):
             raise ValueError("Разрешены только HTTPS-публикации поддерживаемых источников")
         if self.code == "cbr":
-            ids = parse_qs(parsed.query, keep_blank_values=True).get("id", [])
-            if (parsed.path not in {"/press/event/", "/press/pr/"} or len(ids) != 1
-                    or not re.fullmatch(r"[1-9][0-9]*", ids[0])):
-                raise ValueError("Передайте URL публикации ЦБ: /press/event/?id=... или /press/pr/?id=...")
-            return "https://www.cbr.ru" + parsed.path + "?" + urlencode({"id": ids[0]})
+            query = parse_qs(parsed.query, keep_blank_values=True)
+            ids, files = query.get("id", []), query.get("file", [])
+            path = parsed.path.lower()
+            if path not in {"/press/event/", "/press/pr/"}:
+                raise ValueError("Передайте URL отдельной публикации ЦБ")
+            if len(ids) == 1 and not files and re.fullmatch(r"[1-9][0-9]*", ids[0]):
+                identity = {"id": ids[0]}
+            elif (path == "/press/pr/" and len(files) == 1 and not ids
+                    and re.fullmatch(r"[A-Za-z0-9_-]+\.htm", files[0])):
+                identity = {"file": files[0]}
+            else:
+                raise ValueError("Передайте URL публикации ЦБ с числовым id или именем file=...htm")
+            return "https://www.cbr.ru" + path + "?" + urlencode(identity)
         path = parsed.path.rstrip("/")
+        if self.code == "ria":
+            if not re.fullmatch(r"/[0-9]{8}/[a-z0-9-]+-[1-9][0-9]*\.html", path):
+                raise ValueError("Передайте URL отдельной публикации РИА: /YYYYMMDD/slug-id.html")
+            return "https://ria.ru" + path
         if self.code == "kommersant":
             if not re.fullmatch(r"/doc/[1-9][0-9]*", path):
                 raise ValueError("Передайте URL публикации Коммерсанта: /doc/числовой-id")
@@ -111,6 +123,7 @@ class SourceAdapter:
 
 
 SOURCES = (
+    SourceAdapter("ria", "РИА Новости", "ria.ru", "https://ria.ru/export/rss2/index.xml", "ria-html-v1"),
     SourceAdapter("kommersant", "Коммерсантъ", "kommersant.ru", "https://www.kommersant.ru/rss/news.xml", "kommersant-html-v1"),
     SourceAdapter("vedomosti", "Ведомости", "vedomosti.ru", "https://www.vedomosti.ru/economics", "vedomosti-html-v1"),
     SourceAdapter("cbr", "Банк России", "cbr.ru", "https://www.cbr.ru/news/", "cbr-html-v1"),
@@ -128,7 +141,7 @@ def adapter_for(url):
                 return adapter
     except (TypeError, AttributeError) as exc:
         raise ValueError("Некорректный URL") from exc
-    raise ValueError("Поддерживаются публикации Банка России, ТАСС, Интерфакса, Ведомостей и Коммерсанта")
+    raise ValueError("Поддерживаются публикации Банка России, ТАСС, Интерфакса, Ведомостей, Коммерсанта и РИА Новости")
 
 
 def normalize_url(url):

@@ -140,7 +140,7 @@ class BrokerTests(unittest.TestCase):
         self.assertTrue(celery_app.conf.task_acks_late)
         self.assertTrue(celery_app.conf.task_ignore_result)
         self.assertEqual(celery_app.conf.worker_prefetch_multiplier, 1)
-        self.assertEqual(set(celery_app.conf.task_routes), {"parser.collect", "parser.dispatch_pending"})
+        self.assertEqual(set(celery_app.conf.task_routes), {"parser.collect", "parser.dispatch_pending", "parser.poll_rss"})
         with patch.object(celery_app, "send_task") as send:
             self.assertEqual(dispatch_pending(self.db)["sent"], 1)
             self.assertEqual(send.call_args.args[0], "parser.collect")

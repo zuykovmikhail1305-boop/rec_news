@@ -28,3 +28,12 @@ def collect_publication(job_id: int, dispatch_token: str):
 def reconcile_pending():
     with SessionLocal() as db:
         return dispatch_pending(db)
+
+
+@celery_app.task(name="parser.poll_rss")
+def discover_rss_publications():
+    from .rss import poll_rss, rss_config
+    config = rss_config()
+    if not config.enabled:
+        return {"status": "disabled"}
+    return poll_rss(config=config)
