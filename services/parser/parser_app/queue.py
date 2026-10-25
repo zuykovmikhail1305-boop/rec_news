@@ -37,7 +37,7 @@ def _ensure_state(db, source_id):
             pass  # Another producer/worker initialized this source.
 
 
-def enqueue(db, urls):
+def enqueue(db, urls, *, commit=True, new_only=False):
     # Validate the entire batch before modifying the database.
     prepared = [(adapter_for(url), url) for url in urls]
     prepared = [(adapter, adapter.normalize(url)) for adapter, url in prepared]
@@ -64,6 +64,7 @@ def enqueue(db, urls):
             if not source.enabled:
                 raise ValueError(f"Источник {source.name} отключён")
             _ensure_state(db, source.id)
+            created = False
             item = db.scalar(select(NewsRaw).where(NewsRaw.source_id == source.id, NewsRaw.url == url))
             if item is None:
                 try:
@@ -71,12 +72,15 @@ def enqueue(db, urls):
                         item = NewsRaw(source_id=source.id, url=url, status="pending", attempt_count=0)
                         db.add(item)
                         db.flush()
+                        created = True
                 except IntegrityError:
                     item = db.scalar(select(NewsRaw).where(NewsRaw.source_id == source.id, NewsRaw.url == url))
-            if item.status == "ready":
+            if item.status == "ready" and not new_only:
                 export_publication(db, item)
-            items.append(item)
-        db.commit()
+            if created or not new_only:
+                items.append(item)
+        if commit:
+            db.commit()
         return items
     except Exception:
         db.rollback()

@@ -51,8 +51,9 @@ class RSSTests(unittest.TestCase):
         with self.client(upstream) as client:
             result = poll_rss(config=self.config, factory=self.factory, client=client)
             repeat = poll_rss(config=self.config, factory=self.factory, client=client)
-        self.assertEqual(requested, [FEED, FEED])
-        self.assertEqual(result['feeds'][0]['job_ids'], repeat['feeds'][0]['job_ids'])
+        self.assertEqual(requested, [FEED])
+        self.assertEqual(repeat['feeds'][0]['status'], 'skipped')
+        self.assertEqual(repeat['feeds'][0]['job_ids'], [])
         self.assertEqual(result['feeds'][0]['skipped'], 2)
         with self.factory() as db:
             rows = list(db.scalars(select(NewsRaw)))
@@ -95,21 +96,24 @@ class RSSTests(unittest.TestCase):
         for body in (rss([ARTICLE]), b'<html>not a feed</html>'):
             with self.client(lambda request:httpx.Response(200,content=body)) as client:
                 result=poll_rss(config=self.config,factory=self.factory,client=client)
-            self.assertEqual(result['feeds'][0]['status'],'failed')
+            expected='disabled' if body.startswith(b'<?xml') else 'failed'
+            self.assertEqual(result['feeds'][0]['status'],expected)
+            with self.factory() as db:
+                source=db.scalar(select(NewsSource));source.enabled=True;db.commit()
         with self.factory() as db: self.assertEqual(list(db.scalars(select(NewsRaw))),[])
 
     def test_redirects_cannot_leave_source_or_use_private_host(self):
         for destination in ['https://127.0.0.1/feed','https://ria.ru/feed','http://www.interfax.ru/rss.asp']:
             with self.client(lambda request:httpx.Response(302,headers={'location':destination})) as client:
-                result=poll_rss(config=self.config,factory=self.factory,client=client)
+                result=poll_rss(config=self.config,factory=self.factory,client=client,force=True)
             self.assertEqual(result['feeds'][0]['status'],'failed')
 
     def test_feed_size_and_entry_count_are_bounded(self):
         config=RSSConfig(True,{'interfax':FEED},300,1,15)
         with self.client(lambda request:httpx.Response(200,content=rss([ARTICLE,'https://www.interfax.ru/business/54321']))) as client:
-            self.assertEqual(poll_rss(config=config,factory=self.factory,client=client)['feeds'][0]['discovered'],1)
+            self.assertEqual(poll_rss(config=config,factory=self.factory,client=client)['feeds'][0]['new'],1)
         with self.client(lambda request:httpx.Response(200,content=b'x'*(MAX_FEED_BYTES+1))) as client:
-            self.assertEqual(poll_rss(config=config,factory=self.factory,client=client)['feeds'][0]['status'],'failed')
+            self.assertEqual(poll_rss(config=config,factory=self.factory,client=client,force=True)['feeds'][0]['status'],'failed')
 
     def test_dry_run_does_not_open_database_or_publish(self):
         with self.client(lambda request:httpx.Response(200,content=rss([ARTICLE]))) as client:

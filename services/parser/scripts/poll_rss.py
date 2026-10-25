@@ -12,6 +12,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="discover URLs without database writes or dispatch")
+    parser.add_argument("--force", action="store_true", help="ignore next-poll time and HTTP validators, but not an active lease")
     args = parser.parse_args()
     from parser_app.rss import poll_rss, rss_config
     config = rss_config()
@@ -21,7 +22,7 @@ def main():
         initialize_database(engine)
     try:
         while True:
-            result = poll_rss(config=config, dry_run=args.dry_run)
+            result = poll_rss(config=config, dry_run=args.dry_run, force=args.force)
             print(json.dumps(result, ensure_ascii=False), flush=True)
             if args.once:
                 return int(any(feed["status"] == "failed" for feed in result["feeds"]))

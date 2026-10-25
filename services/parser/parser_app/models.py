@@ -103,3 +103,23 @@ class BrokerDispatch(Base):
     raw_id: Mapped[int] = mapped_column(ForeignKey("news_raw.id"), primary_key=True)
     token: Mapped[str | None] = mapped_column(String(32))
     reserved_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class RSSPollState(Base):
+    """Shared, recoverable polling state for one source/feed URL."""
+    __tablename__ = "parser_rss_state"
+    feed_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source_code: Mapped[str] = mapped_column(String(80))
+    feed_url: Mapped[str] = mapped_column(Text)
+    lease_token: Mapped[str | None] = mapped_column(String(32))
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_poll_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    etag: Mapped[str | None] = mapped_column(Text)
+    last_modified: Mapped[str | None] = mapped_column(Text)
+    consecutive_errors: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_error: Mapped[str | None] = mapped_column(Text)
+    last_http_status: Mapped[int | None] = mapped_column(Integer)
+    last_discovered: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_queued: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
