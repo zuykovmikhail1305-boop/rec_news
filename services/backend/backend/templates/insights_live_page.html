@@ -5,5 +5,6 @@
 <main class="content insight-detail" data-insight-detail data-user-id="{{ user_id }}" data-news-id="{{ news_id }}" data-poll="{{ 'true' if card_state == 'pending' else 'false' }}">
 <div data-insight-card>{% include "insights_live_card.html" %}</div>
 <p class="live-message" data-card-message role="status" aria-live="polite"></p>
+<button type="button" data-retry-insights>Обновить карточку</button>
 </main></div></div>{% endblock %}
 {% block scripts %}<script src="/static/live-insights.js" defer></script>{% endblock %}

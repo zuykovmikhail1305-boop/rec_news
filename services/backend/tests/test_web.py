@@ -19,6 +19,10 @@ PROFILES = {
 class FakeML:
     unavailable = False
 
+    def processing_ready(self):
+        if self.unavailable: raise MLUnavailable("offline")
+        return True
+
     def profiles(self, limit=50, offset=0):
         if self.unavailable:
             raise MLUnavailable("ML offline")

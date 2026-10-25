@@ -6,7 +6,7 @@
   const root = feedRoot || detailRoot;
   const expectedUser = root.dataset.userId;
   const requests = new Set();
-  let timer = null, active = true, busy = false, polls = 0;
+  let timer = null, active = true, busy = false, polls = 0, needsGeneration = true;
   const message = document.querySelector(feedRoot ? '[data-insights-message]' : '[data-card-message]');
   const retryButton = root.querySelector('[data-retry-insights]');
   const show = text => { if (active && message) message.textContent = text || ''; };
@@ -31,7 +31,7 @@
     clearTimeout(timer);
     if (!active || !poll) return;
     if (++polls > 180) { show('Подготовка занимает больше времени. Обновите страницу немного позже.'); return; }
-    timer = setTimeout(() => update().catch(() => show('Не удалось обновить данные. Обновите страницу или попробуйте ещё раз.')), 5000);
+    timer = setTimeout(() => (needsGeneration ? generate() : update()).catch(() => show('Не удалось обновить данные. Обновите страницу или попробуйте ещё раз.')), 5000);
   }
 
   async function update() {
@@ -46,19 +46,34 @@
     }
     if (data.html) root.querySelector(feedRoot ? '[data-insights-feed]' : '[data-insight-card]').innerHTML = data.html;
     schedule(data.poll);
+    return data;
   }
 
   async function generate() {
     if (busy || !active) return;
-    clearTimeout(timer); polls = 0; busy = true;
+    clearTimeout(timer); busy = true;
     if (retryButton) retryButton.disabled = true;
     show('Проверяем готовность инсайтов…');
     try {
-      const result = await request('/api/insights/generate', {method: 'POST'});
+      const url = feedRoot ? '/api/insights/generate' : '/api/insights/' + encodeURIComponent(root.dataset.newsId) + '/generate';
+      const result = await request(url, {method: 'POST'});
       if (!result) return;
-      if (!result.response.ok) show(result.data.detail || 'Не удалось запустить подготовку.');
-      else show('');
-      await update();
+      if (result.data.retry) {
+        needsGeneration = true;
+        show(result.data.detail || 'Ожидаем завершения текущей подготовки…');
+        const state = await update();
+        if (state && state.recovered_cards) {
+          needsGeneration = false;
+          show('');
+          schedule(state.poll);
+        } else schedule(true);
+      } else if (!result.response.ok) {
+        show(result.data.detail || 'Не удалось запустить подготовку.');
+      } else {
+        needsGeneration = false;
+        show('');
+        await update();
+      }
     } catch (error) {
       if (active) show('Не удалось связаться с сервисом. Нажмите «Обновить», чтобы повторить.');
     } finally {
@@ -72,8 +87,8 @@
     requests.forEach(controller => controller.abort());
   });
   window.addEventListener('pageshow', event => { if (event.persisted) window.location.reload(); });
-  if (feedRoot) {
-    retryButton.addEventListener('click', generate);
-    generate();
-  } else if (root.dataset.poll === 'true') schedule(true);
+  if (retryButton) retryButton.addEventListener('click', () => {
+    needsGeneration = true; polls = 0; generate();
+  });
+  generate();
 })();

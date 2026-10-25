@@ -109,6 +109,15 @@ class InsightCard(BaseModel):
     verification: dict
 
 
+class ProcessingResult(BaseModel):
+    result: bool
+
+
+class ProcessingJob(BaseModel):
+    status: Literal["accepted", "already_running"]
+    news: int = Field(ge=0)
+
+
 class MLClient:
     def __init__(self, client):
         self.client = client
@@ -147,9 +156,18 @@ class MLClient:
         return self._owned(self._get("/users/" + quote(user_id, safe="") + "/news", UserFeed,
                                     limit=limit, offset=offset, with_text=False), user_id)
 
-    def generate_insights(self, user_id):
+    def processing_ready(self):
+        return self._get("/processing.result", ProcessingResult).result
+
+    def enqueue_processing(self):
+        return self._request("POST", "/processing.enqueue", ProcessingJob)
+
+    def generate_insights(self, user_id, *, news_ids=None):
+        body = {"refresh": False}
+        if news_ids is not None:
+            body["news_ids"] = news_ids
         return self._owned(self._request("POST", "/users/" + quote(user_id, safe="") + "/insights/generate",
-                                        InsightJob, json={"refresh": False}), user_id)
+                                        InsightJob, json=body), user_id)
 
     def latest_job(self, user_id):
         return self._owned(self._get("/users/" + quote(user_id, safe="") + "/insights/jobs/latest", InsightJob), user_id)

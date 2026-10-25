@@ -1,11 +1,14 @@
 {% if feed_error %}<div class="demo-alert" role="alert">{{ feed_error }}</div>{% endif %}
 {% if job %}<div class="generation-state" role="status">
 {% if job.status in ['queued','running'] %}<span class="generation-dot"></span><b>Готовим инсайты</b> <span>Готово {{ job.done }} из {{ job.total }}</span>
+{% elif job.status == 'done' and not (feed and feed.items) and not completed_cards %}<b>Задание ML завершено, но готовые карточки пока недоступны</b><span>Обновите страницу позже или проверьте данные ML.</span>
 {% elif job.status == 'done' %}<b>Подготовка завершена</b><span>{{ job.done }} карточек{% if job.failed %}, не удалось подготовить {{ job.failed }}{% endif %}</span>
 {% elif job.status == 'failed' %}<b>Не удалось подготовить карточки</b><span>Можно повторить подготовку кнопкой «Обновить».</span>
 {% elif job.status == 'cancelled' %}<b>Подготовка остановлена</b><span>Готовые карточки доступны ниже.</span>{% endif %}
 </div>{% endif %}
-{% if feed and feed.status == 'not_computed' %}<div class="card empty-state"><h3>Лента пока не подготовлена</h3><p>После подбора новостей здесь появятся события для вашей компании.</p></div>
+{% if completed_cards %}
+{% include 'completed_insight_cards.html' %}
+{% elif feed and feed.status == 'not_computed' %}<div class="card empty-state"><h3>Лента пока не подготовлена</h3><p>После подбора новостей здесь появятся события для вашей компании.</p></div>
 {% elif feed and feed.items %}
 <p class="feed-count">Всего событий: {{ feed.total }} · показаны {{ offset+1 }}–{{ offset + feed.items|length }}</p>
 <div class="insight-feed">{% for item in feed.items %}

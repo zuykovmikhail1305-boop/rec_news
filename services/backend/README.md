@@ -18,16 +18,15 @@ HTML формируется через Jinja2; JavaScript обновляет л�
 ```powershell
 cd D:/repos/rec_news/services/backend
 uv sync --locked
-$env:ML_API_URL='http://127.0.0.1:8002'
-uv run python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+# Если .env ещё нет: скопируйте .env.example и укажите реквизиты PostgreSQL.
+uv run --env-file .env python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
 Откройте [главную](http://127.0.0.1:8000/) или
 [список компаний](http://127.0.0.1:8000/profiles).
 Swagger: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
-`ML_API_URL` — единственная настройка подключения, используемая текущим
-веб-сценарием. По умолчанию это `http://127.0.0.1:8002`. Переменная задаётся
+`ML_API_URL` задаёт адрес ML API для страниц и фонового запуска processing. По умолчанию это `http://127.0.0.1:8002`. Переменная задаётся
 в окружении процесса; собственный `.env` backend автоматически не читает.
 Если используете свой файл, передайте его явно:
 
@@ -47,9 +46,9 @@ uv run --env-file .env python -m uvicorn backend.main:app --host 127.0.0.1 --por
 Сбор публикаций выполняет [parser](../parser/README.md). В общем PostgreSQL
 парсер записывает исходные публикации в `public.news_raw` и передаёт готовые
 тексты в `ml_news.news`. Затем ML обрабатывает новости и предоставляет ленты
-и карточки через HTTP. Backend не подключается напрямую к этим таблицам:
-для перехода общей системы на PostgreSQL одинаковое подключение нужно настроить
-у parser и ML, а у backend достаточно корректного `ML_API_URL`.
+и карточки через HTTP. Фоновый монитор backend читает только наличие строк `new`
+в `ml_news.news` и вызывает ML API. Подключение к PostgreSQL должно вести
+в одну базу у parser, ML и монитора backend.
 
 В кодовой базе остались модули прежней веб-БД; текущие обработчики страниц
 и инсайтов их не используют. Отдельная инициализация веб-БД не требуется.
@@ -60,12 +59,17 @@ uv run --env-file .env python -m uvicorn backend.main:app --host 127.0.0.1 --por
    выбирает первый доступный профиль ML.
 2. Главная `/?user_id=...` получает профиль, ленту и последнее задание подготовки.
 3. JavaScript при открытии главной вызывает
-   `POST /api/insights/generate?user_id=...`. Backend передаёт ML запрос
+   `POST /api/insights/generate?user_id=...`. Backend ждёт готовности processing
+   через `GET /processing.result`, затем передаёт ML запрос
    с `{"refresh":false}` — готовые карточки не требуют принудительной регенерации.
 4. Затем браузер запрашивает `GET /api/insights?user_id=...` и, пока задание
    находится в `queued` или `running`, обновляет данные каждые 5 секунд.
 5. При переходе на `/insights/{news_id}?user_id=...` загружается карточка
-   с блоками, которые вернул ML. Если она готовится, браузер опрашивает её состояние.
+   с блоками, которые вернул ML. JavaScript вызывает
+   `POST /api/insights/{news_id}/generate?user_id=...`: создаётся асинхронное
+   ML-задание с `news_ids=[news_id]` и `refresh=false`. Готовая карточка берётся
+   из кэша ML; браузер опрашивает состояние. Если другое задание пользователя
+   ещё не охватывает эту новость, запрос повторяется после ожидания.
 
 Чтение страниц и GET-запросы обновления сами не запускают генерацию или глобальную
 обработку новостей. На главной запуск делает отдельный POST из JavaScript;
@@ -89,6 +93,8 @@ API для интерфейса, везде обязателен `user_id`:
 - `GET /api/insights?offset=0` — обновление ленты, по 20 новостей;
   ответ содержит `user_id`, HTML-фрагмент `html`, признак продолжения опроса `poll`
   и возможную ошибку `error`.
+- `POST /api/insights/{news_id}/generate` — подготовка одной карточки, HTTP 202.
+- `GET /api/processing/status` — состояние фонового монитора.
 - `GET /api/insights/{news_id}` — обновление карточки;
   ответ содержит `user_id`, `html`, `poll`.
 
@@ -108,6 +114,7 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/insights?user_id=$userId"
 
 Клиент `backend/ml_client.py` использует:
 
+- `POST /processing.enqueue`, `GET /processing.result`;
 - `GET /profiles`, `GET /profiles/{user_id}`;
 - `GET /users/{user_id}/news` с `with_text=false`;
 - `POST /users/{user_id}/insights/generate` с `refresh=false`;
@@ -117,7 +124,8 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/insights?user_id=$userId"
 Клиент проверяет формат ответа и соответствие `user_id`/`news_id` запросу.
 Таймаут обращения к ML — 10 секунд, подключения — 3 секунды.
 Недоступность ML отображается в интерфейсе; соответствующие API возвращают 503.
-Запуск генерации может вернуть 409, если лента ещё не подготовлена, или 404,
+Запуск генерации может вернуть 409 с `retry=true`, если processing ещё идёт
+или лента не подготовлена; браузер повторяет запрос через 5 секунд. Возможен 404,
 если нет данных для генерации. Отсутствующий обязательный `user_id` даёт 422.
 
 Если карточка не появилась, проверьте профиль, подготовленность персональной ленты,
@@ -156,3 +164,57 @@ uv run python -m unittest discover -s tests -p "test_*.py" -v
 
 Самостоятельный frontend в `services/web` и старые HTML-прототипы не нужны
 для запуска описанного FastAPI-интерфейса.
+
+## Автоматический запуск обработки новых новостей
+
+Скопируйте `.env.example` в `.env`, если своего файла ещё нет, и задайте:
+
+```dotenv
+ML_API_URL=http://127.0.0.1:8002
+BACKEND_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@127.0.0.1:5432/rec_news
+BACKEND_PROCESSING_ENABLED=true
+BACKEND_PROCESSING_INTERVAL=15
+BACKEND_ML_NEWS_SCHEMA=ml_news
+```
+
+Запускайте backend с `uv run --env-file .env python -m uvicorn backend.main:app
+--host 127.0.0.1 --port 8000`. Эти настройки включают фоновый монитор в lifespan
+приложения. Он работает без посетителей сайта и каждые 15 секунд проверяет,
+есть ли в таблице ML новости со статусом `new`. Только в этом случае backend
+вызывает `POST /processing.enqueue`. Backend не меняет статусы новостей.
+
+Для подключения поддерживается и `REC_NEWS_DATABASE_URL`, если
+`BACKEND_DATABASE_URL` не задан. Без URL монитор по умолчанию выключен;
+явное включение без URL считается ошибкой конфигурации. Минимальный интервал —
+5 секунд. Перезапуск backend перечитывает конфигурацию.
+
+Блокировка PostgreSQL защищает отправку от нескольких экземпляров backend;
+ML дополнительно объединяет активные запуски. При ошибке БД или ML монитор
+повторяет проверку на следующем интервале. После перезапуска он снова обнаружит
+необработанные строки. Требуются права чтения таблицы; схемы он не создаёт.
+В ML должен работать исполнитель задач `processing.run`; у parser, backend
+и ML должна быть одна PostgreSQL-база. Встроенный периодический запуск ML
+`REC_NEWS_PIPELINE_WORKER` можно оставить выключенным, когда orchestration делает backend.
+
+Диагностика: `GET /api/processing/status` возвращает `enabled`, `status`,
+`checked_at` и тип ошибки, если она произошла. Статусы `accepted`/`already_running`
+означают ответ ML на последнюю проверку; `idle` — входных строк `new` не найдено.
+Это состояние монитора, а не гарантия завершения ML-конвейера.
+
+Дополнительные проверки:
+
+```powershell
+node tests/live-insights.cjs
+$env:BACKEND_TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/TEST_DB'
+uv run python -m unittest discover -s tests -p test_processing.py -v
+Remove-Item Env:BACKEND_TEST_DATABASE_URL
+```
+
+Интеграционный тест создаёт и удаляет только свою случайную схему `backend_test_*`.
+
+Если ML вернул пустую персональную ленту, но в последнем задании есть завершённые
+элементы, backend дополнительно читает до 20 готовых карточек через
+`GET /users/{user_id}/news/{news_id}/insight` и показывает доступные результаты.
+Сам статус `done` не считается подтверждением наличия карточки: если чтение
+неуспешно, интерфейс сообщает, что карточки пока недоступны. Это отображение
+результатов последнего задания, а не восстановление всей истории ленты.

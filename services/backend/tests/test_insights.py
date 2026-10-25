@@ -34,6 +34,7 @@ CARD["header"]["sources_count"] = 2
 class FakeInsightsML(web_tests.FakeML):
     def __init__(self):
         self.generated = []
+        self.targeted = []
         self.ready = False
         self.has_job = False
         self.computed = True
@@ -51,7 +52,8 @@ class FakeInsightsML(web_tests.FakeML):
             item["insight"]={"card_id":"ic_1","status":"ready","headline":"Стоимость финансирования останется высокой","impact":"risk","priority":"high","horizon":"1-3m","reliability":"confirmed"}
         return UserFeed(user_id=user_id,status="ready" if self.computed else "not_computed",total=1 if self.computed else 0,items=[item] if self.computed else [])
 
-    def generate_insights(self, user_id):
+    def generate_insights(self, user_id, *, news_ids=None):
+        if news_ids is not None: self.targeted.append((user_id,news_ids))
         self.generated.append(user_id)
         if not self.computed: raise MLNotReady()
         self.has_job = True
@@ -156,6 +158,63 @@ class InsightRoutesTests(unittest.TestCase):
         self.assertNotIn('<script>unsafe',response.text)
         self.assertNotIn('Учебный вывод',response.text)
 
+    def test_opened_card_starts_only_requested_news(self):
+        response = self.client.post('/api/insights/news_1/generate?user_id=u_02')
+        self.assertEqual(response.status_code,202)
+        self.assertEqual(self.ml.targeted,[('u_02',['news_1'])])
+        self.assertFalse(response.json()['retry'])
+        page = self.client.get('/insights/news_1?user_id=u_02')
+        self.assertIn('data-retry-insights',page.text)
+
+    def test_processing_wait_retries_without_starting_generation(self):
+        with patch.object(self.ml,'processing_ready',return_value=False):
+            for url in ('/api/insights/generate','/api/insights/news_1/generate'):
+                response = self.client.post(url+'?user_id=u_01')
+                self.assertEqual(response.status_code,409)
+                self.assertTrue(response.json()['retry'])
+        self.assertEqual(self.ml.generated,[])
+        self.assertEqual(self.generate().status_code,202)
+
+    def test_card_defers_if_other_job_does_not_cover_this_news(self):
+        response = self.client.post('/api/insights/news_2/generate?user_id=u_01')
+        self.assertTrue(response.json()['retry'])
+
+    def test_missing_news_and_outage_do_not_retry_forever(self):
+        for error,code in ((ProfileNotFound(),404),(MLUnavailable(),503)):
+            with patch.object(self.ml,'generate_insights',side_effect=error):
+                response=self.client.post('/api/insights/news_1/generate?user_id=u_01')
+                self.assertEqual(response.status_code,code)
+                self.assertFalse(response.json().get('retry',False))
+
+    def test_done_job_card_is_displayed_when_personal_feed_is_not_computed(self):
+        self.ml.ready=True;self.ml.has_job=True;self.ml.computed=False
+        with patch.object(self.ml,'insight',wraps=self.ml.insight) as read:
+            page=self.client.get('/?user_id=u_02')
+            self.assertIn('Стоимость финансирования',page.text)
+            self.assertIn('/insights/news_1?user_id=u_02',page.text)
+            self.assertNotIn('Лента пока не подготовлена',page.text)
+            read.assert_called_with('u_02','news_1')
+        data=self.client.get('/api/insights?user_id=u_02').json()
+        self.assertTrue(data['recovered_cards'])
+        self.assertFalse(data['poll'])
+        self.assertIn('Синтетический факт',data['html'])
+        self.assertEqual(self.ml.generated,[])
+
+    def test_done_job_does_not_claim_card_exists_when_card_endpoint_returns_404(self):
+        self.ml.ready=True;self.ml.has_job=True;self.ml.computed=False
+        with patch.object(self.ml,'insight',side_effect=ProfileNotFound()):
+            data=self.client.get('/api/insights?user_id=u_01').json()
+        self.assertFalse(data['recovered_cards'])
+        self.assertIn('готовые карточки пока недоступны',data['html'])
+        self.assertNotIn('Подготовка завершена',data['html'])
+
+    def test_empty_ready_feed_also_reads_actual_completed_card(self):
+        self.ml.ready=True;self.ml.has_job=True
+        with patch.object(self.ml,'feed',return_value=UserFeed(user_id='u_01',status='ready',items=[])):
+            data=self.client.get('/api/insights?user_id=u_01').json()
+        self.assertTrue(data['recovered_cards'])
+        self.assertIn('Стоимость финансирования',data['html'])
+
 
 class InsightClientTests(unittest.TestCase):
     def test_generation_contract_is_async_and_does_not_force_refresh(self):
@@ -177,3 +236,22 @@ class InsightClientTests(unittest.TestCase):
             with httpx.Client(base_url='http://ml',transport=httpx.MockTransport(lambda req:httpx.Response(200,json=payload))) as http:
                 with self.assertRaises(MLUnavailable):
                     getattr(MLClient(http),method)('u_01',*(['news_1'] if method=='insight' else []))
+
+
+class ProcessingClientTests(unittest.TestCase):
+    def test_processing_and_targeted_generation_contract(self):
+        import json
+        requests=[]
+        def handler(request):
+            requests.append(request)
+            if request.url.path == '/processing.enqueue':
+                return httpx.Response(202,json={'status':'accepted','news':2})
+            if request.url.path == '/processing.result':
+                return httpx.Response(200,json={'result':True})
+            return httpx.Response(202,json={'job_id':'j','user_id':'u_01','status':'queued','total':1})
+        with httpx.Client(base_url='http://ml',transport=httpx.MockTransport(handler)) as http:
+            client=MLClient(http)
+            self.assertEqual(client.enqueue_processing().news,2)
+            self.assertTrue(client.processing_ready())
+            client.generate_insights('u_01',news_ids=['news_1'])
+        self.assertEqual(json.loads(requests[-1].content),{'refresh':False,'news_ids':['news_1']})

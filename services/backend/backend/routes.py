@@ -59,8 +59,24 @@ def feed_state(ml, user_id, offset=0):
     return feed, job, error
 
 
-def feed_context(feed, job, error, offset=0):
+def completed_cards(ml, user_id, feed, job, offset=0):
+    """Read actual cached cards when the personal feed is absent or empty."""
+    if (feed and feed.items) or not job:
+        return []
+    ids = list(dict.fromkeys(item.news_id for item in job.items if item.status == "done"))
+    cards = []
+    for news_id in ids[offset:offset + 20]:
+        try:
+            cards.append(ml.insight(user_id, news_id))
+        except (ProfileNotFound, MLNotReady, MLUnavailable):
+            # A completed job is not proof that its card still exists.
+            continue
+    return cards
+
+
+def feed_context(feed, job, error, offset=0, cards=None):
     return {"feed": feed, "job": job, "feed_error": error, "offset": offset,
+            "completed_cards": cards or [],
             "item_states": {item.news_id: item.status for item in job.items} if job else {}}
 
 
@@ -113,8 +129,9 @@ def home(request: Request, user_id: str | None = Query(None, min_length=1, max_l
     except MLUnavailable:
         details = None
     feed, job, error = feed_state(ml, user_id, offset) if details else (None, None, None)
+    cards = completed_cards(ml, user_id, feed, job, offset)
     return page(request, "demo_home.html", {"details": details, "user_id": user_id,
-                **feed_context(feed, job, error, offset)}, status=200 if details else 503)
+                **feed_context(feed, job, error, offset, cards)}, status=200 if details else 503)
 
 
 @router.get("/insights")
@@ -126,10 +143,12 @@ def insights(user_id: str | None = Query(None, min_length=1, max_length=200)):
 @router.post("/api/insights/generate")
 def generate_insights(user_id: str = Query(..., min_length=1, max_length=200), ml: MLClient = Depends(get_ml_client)):
     try:
+        if not ml.processing_ready():
+            raise MLNotReady()
         job = ml.generate_insights(user_id)
         return json_response({"user_id": user_id, "job": job.model_dump(mode="json")}, 202)
     except MLNotReady:
-        return json_response({"detail": "Для этого профиля ещё не подготовлена лента. Генерация пока недоступна."}, 409)
+        return json_response({"detail": "Лента готовится. Подготовка инсайтов начнётся автоматически.", "retry": True}, 409)
     except ProfileNotFound:
         return json_response({"detail": "Для этого профиля пока нет новостей для генерации."}, 404)
     except MLUnavailable:
@@ -140,10 +159,12 @@ def generate_insights(user_id: str = Query(..., min_length=1, max_length=200), m
 def get_insights(request: Request, user_id: str = Query(..., min_length=1, max_length=200),
                  offset: int = Query(0, ge=0), ml: MLClient = Depends(get_ml_client)):
     feed, job, error = feed_state(ml, user_id, offset)
-    context = {"user_id": user_id, **feed_context(feed, job, error, offset)}
+    cards = completed_cards(ml, user_id, feed, job, offset)
+    context = {"user_id": user_id, **feed_context(feed, job, error, offset, cards)}
     html = templates.env.get_template("insights_live_feed.html").render(**context)
     return json_response({"user_id": user_id, "html": html,
-        "poll": bool(job and job.status in ("queued", "running")), "error": error}, 200 if feed else 503)
+        "poll": bool(job and job.status in ("queued", "running")) or bool(feed and feed.status == "not_computed" and not cards),
+        "recovered_cards": bool(cards), "error": error}, 200 if feed or cards else 503)
 
 
 def card_state(ml, user_id, news_id):
@@ -179,3 +200,27 @@ def get_insight(request: Request, news_id: str, user_id: str = Query(..., min_le
     card, state, message = card_state(ml, user_id, news_id)
     html = templates.env.get_template("insights_live_card.html").render(card=card, card_state=state, message=message)
     return json_response({"user_id": user_id, "html": html, "poll": state == "pending"}, 503 if state == "error" else 200)
+
+
+@router.post("/api/insights/{news_id}/generate")
+def generate_card(news_id: str, user_id: str = Query(..., min_length=1, max_length=200),
+                  ml: MLClient = Depends(get_ml_client)):
+    try:
+        if not ml.processing_ready():
+            raise MLNotReady()
+        job = ml.generate_insights(user_id, news_ids=[news_id])
+        deferred = (job.status in ("queued", "running") and
+                    not any(item.news_id == news_id for item in job.items))
+        return json_response({"user_id": user_id, "job": job.model_dump(mode="json"),
+                              "retry": deferred}, 202)
+    except MLNotReady:
+        return json_response({"detail": "Лента готовится. Карточка будет запрошена автоматически.", "retry": True}, 409)
+    except ProfileNotFound:
+        return json_response({"detail": "Профиль или новость не найдены."}, 404)
+    except MLUnavailable:
+        return json_response({"detail": "Не удалось запустить подготовку карточки. Попробуйте ещё раз."}, 503)
+
+
+@router.get("/api/processing/status")
+def processing_status(request: Request):
+    return json_response(getattr(request.app.state, "processing", {"enabled": False, "status": "disabled"}))
