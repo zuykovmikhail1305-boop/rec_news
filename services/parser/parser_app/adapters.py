@@ -60,6 +60,10 @@ class SourceAdapter:
                 raise ValueError("Передайте URL публикации ЦБ: /press/event/?id=... или /press/pr/?id=...")
             return "https://www.cbr.ru" + parsed.path + "?" + urlencode({"id": ids[0]})
         path = parsed.path.rstrip("/")
+        if self.code == "ria":
+            if not re.fullmatch(r"/[0-9]{8}/[a-z0-9-]+-[1-9][0-9]*\.html", path):
+                raise ValueError("Передайте URL отдельной публикации РИА: /YYYYMMDD/slug-id.html")
+            return "https://ria.ru" + path
         if self.code == "kommersant":
             if not re.fullmatch(r"/doc/[1-9][0-9]*", path):
                 raise ValueError("Передайте URL публикации Коммерсанта: /doc/числовой-id")
@@ -111,6 +115,7 @@ class SourceAdapter:
 
 
 SOURCES = (
+    SourceAdapter("ria", "РИА Новости", "ria.ru", "https://ria.ru/export/rss2/index.xml", "ria-html-v1"),
     SourceAdapter("kommersant", "Коммерсантъ", "kommersant.ru", "https://www.kommersant.ru/rss/news.xml", "kommersant-html-v1"),
     SourceAdapter("vedomosti", "Ведомости", "vedomosti.ru", "https://www.vedomosti.ru/economics", "vedomosti-html-v1"),
     SourceAdapter("cbr", "Банк России", "cbr.ru", "https://www.cbr.ru/news/", "cbr-html-v1"),
@@ -128,7 +133,7 @@ def adapter_for(url):
                 return adapter
     except (TypeError, AttributeError) as exc:
         raise ValueError("Некорректный URL") from exc
-    raise ValueError("Поддерживаются публикации Банка России, ТАСС, Интерфакса, Ведомостей и Коммерсанта")
+    raise ValueError("Поддерживаются публикации Банка России, ТАСС, Интерфакса, Ведомостей, Коммерсанта и РИА Новости")
 
 
 def normalize_url(url):
