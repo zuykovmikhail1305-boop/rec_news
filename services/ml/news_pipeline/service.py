@@ -292,7 +292,7 @@ class MLService:
                                  news_unique=sum(result is None for result in results))
                 matched = self.match_pending_events()
                 store.update_run(run_id, stage="recommend", events_matched=matched)
-            users = self.profiles.all_ids() if user_ids is None else user_ids   # [] — только обработка новостей
+            users = list(user_ids or [])   # только явно переданные пользователи (вход — news.rebuild); всех профилей не пересчитываем
             store.update_run(run_id, users_total=len(users))
             done = failed = 0
             for user_id in users:

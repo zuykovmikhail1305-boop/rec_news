@@ -202,7 +202,7 @@ max_tokens = { fact = 900, bank_view = 600, ai_conclusion = 900, risks = 900, hy
 # Задачи через очередь (REC_NEWS_QUEUE=local — потоки в процессе, celery — Celery + RabbitMQ; docs/broker.md).
 analyze_retries = 6          # analytics.analyze: повторов, если новости ещё нет в базе или упала LLM
 analyze_retry_delay_s = 30   # пауза перед первым повтором, дальше вдвое больше (30, 60 … 960 с ≈ 32 мин всего)
-refresh_feeds = true         # после обработки новостей пересчитать ленты пользователей (запуск processing.run)
+refresh_feeds = false        # ленты пересчитывает только вход пользователя (news.rebuild), а не все профили
 feeds_refresh_delay_s = 60   # подождать: новости приходят пачками — один пересчёт на пачку
 feeds_refresh_retry_s = 120  # идёт другой запуск — проверить снова через столько секунд
 feeds_refresh_retries = 30   # …и не больше стольких раз (≈ 1 ч)
