@@ -7,5 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-ENTRYPOINT ["python", "-m", "uvicorn", "parser_app.main:app"]
-CMD ["--host", "0.0.0.0", "--port", "8001", "--workers", "1"]
+ENV PARSER_API_HOST=0.0.0.0 PARSER_API_PORT=8001
+
+ENTRYPOINT ["python", "scripts/run_api.py"]

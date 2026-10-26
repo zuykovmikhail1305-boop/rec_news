@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -37,4 +38,5 @@ app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host=os.getenv("BACKEND_API_HOST", "127.0.0.1"),
+                port=int(os.getenv("BACKEND_API_PORT", "8000")), workers=1)
