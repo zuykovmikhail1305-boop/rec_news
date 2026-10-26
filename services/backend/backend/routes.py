@@ -87,6 +87,10 @@ def json_response(data, status=200):
 
 
 def page(request, template, context, status=200):
+    parsed = demo.parse_profile_id(context.get("user_id") or "")
+    if parsed:   # шапка: кто вошёл и какие компании можно выбрать
+        context = {**context, "demo_user": demo.USERS[parsed[0]], "demo_user_key": parsed[0],
+                   "demo_company_key": parsed[1], "demo_companies": _companies}
     response = templates.TemplateResponse(request, template, context, status_code=status)
     response.headers["Cache-Control"] = "no-store"
     return response

@@ -84,7 +84,7 @@ class DemoLoginTests(unittest.TestCase):
         for url in ("/", "/profiles", "/?user_id=u_02"):   # без демо-профиля — страница входа
             response = self.client.get(url)
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.text.count('class="card login-user"'), 3)
+            self.assertEqual(response.text.count('class="login-user"'), 3)
             self.assertEqual(response.text.count('name="company"'), 9)
             for name in ("Компания Альфа", "Компания Бета", "Компания Гамма", "финансовый директор"):
                 self.assertIn(name, response.text)

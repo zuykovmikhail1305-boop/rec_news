@@ -1,0 +1,27 @@
+{% extends "demo_base.html" %}
+{% set home_url = '/?user_id=' ~ (user_id|urlencode) %}
+{% block body %}
+<div class="app">
+<aside class="side" id="side">
+<a class="brand" href="{{ home_url }}" style="text-decoration:none"><div class="brand-mark">А</div><div>Альфа-Бизнес</div></a>
+<nav class="nav">
+<a href="{{ home_url }}" class="active" aria-current="page"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 3v2M5.6 5.6l1.4 1.4M3 12h2m14 0h2m-3.4-6.4L16.2 7M9 18h6m-5 3h4M12 7a5 5 0 0 0-3 9h6a5 5 0 0 0-3-9z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Инсайты</span><span class="ai-tag">AI</span></a>
+<div class="nav-sep"></div>
+<a href="/profiles"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6M15.5 5.6a3 3 0 0 1 0 5.8M17 14.6c2 .5 3.3 2 3.6 4.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Сменить пользователя</span></a>
+</nav>
+<div class="side-foot">Факты, позиция банка и выводы AI показаны отдельно.</div>
+</aside>
+<div class="main">
+<header class="top">
+<span></span>
+<div class="top-right">
+{% if demo_user %}
+<details class="switcher"><summary class="org-chip"><div class="org-logo" style="background:var(--red);color:#fff">{{ (details.profile.company_name if details and details.profile.company_name else 'К')[:1] }}</div><div><b>{{ details.profile.company_name if details and details.profile.company_name else 'Компания' }}</b><span>{{ demo_user.name }} · {{ demo_user.role }}</span></div></summary>
+<div class="dropdown" style="left:auto;right:0">{% for key, company in demo_companies.items() %}<a href="/enter?user={{ demo_user_key }}&amp;company={{ key }}"><div class="org-logo">{{ (company.company_name or key)[:1] }}</div><div><b>{{ company.company_name or key }}</b><span>{{ company.industry or '' }}</span></div></a>{% endfor %}</div></details>
+<span class="boss"><span class="ava">{{ demo_user.name.split()|map('first')|join }}</span></span>
+{% endif %}
+<a class="ic-btn" href="/profiles" aria-label="Выйти" title="Выйти"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+</div></header>
+{% block main %}{% endblock %}
+</div></div>
+{% endblock %}

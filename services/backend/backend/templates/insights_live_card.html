@@ -1,29 +1,55 @@
-{% macro refs(ids) %}{% if ids %}<small class="evidence-refs">Источники: {% for id in ids %}<a href="#source-{{ id }}">{{ id }}</a> {% endfor %}</small>{% endif %}{% endmacro %}
-{% macro source_block(source) %}<article class="evidence-source" id="source-{{ source.id }}"><b>{{ source.id }} · {{ source.title }}</b><div class="insight-meta">{{ source.outlet or '' }}{% if source.published_at %} · {{ source.published_at|local_date }}{% endif %} · {{ source.reliability_label }}</div>{% if source.quote %}<blockquote>{{ source.quote }}</blockquote>{% endif %}{% if source.url|safe_url %}<a href="{{ source.url|safe_url }}" target="_blank" rel="noopener noreferrer">Открыть первоисточник ↗</a>{% endif %}</article>{% endmacro %}
-{% if not card %}<div class="card empty-state" role="status"><h1>{{ 'Инсайт готовится' if card_state == 'pending' else 'Карточка недоступна' }}</h1><p>{{ message }}</p>{% if card_state == 'error' %}<a class="btn btn-secondary" href="">Повторить загрузку</a>{% endif %}<a class="btn btn-primary" href="/">Ко всем инсайтам</a></div>
+{% macro refs(ids) %}{% for id in ids or [] %}<a class="cite" href="#source-{{ id }}">{{ id }}</a>{% endfor %}{% endmacro %}
+{% macro source_block(source) %}<div class="src" id="source-{{ source.id }}"><div class="n">{{ source.id }}</div><div><b>{{ source.title }}</b><span class="tier">{{ source.reliability_label }}</span><div class="qt">{{ source.outlet or '' }}{% if source.published_at %} · {{ source.published_at|local_date }}{% endif %}</div>{% if source.quote %}<div class="qt">{{ source.quote }}</div>{% endif %}{% if source.url|safe_url %}<a class="lnk" href="{{ source.url|safe_url }}" target="_blank" rel="noopener noreferrer">Открыть первоисточник →</a>{% endif %}</div></div>{% endmacro %}
+{% if not card %}<div class="card empty" role="status"><h1>{{ 'Инсайт готовится' if card_state == 'pending' else 'Карточка недоступна' }}</h1><p>{{ message }}</p>{% if card_state == 'error' %}<a class="btn btn-secondary" href="">Повторить загрузку</a>{% endif %}<a class="btn btn-primary" href="/">Ко всем инсайтам</a></div>
 {% else %}
-<div class="insight-chips">{% for key in ['impact','priority','horizon','reliability'] %}{% set chip = card.header.get(key) %}{% if chip %}<span class="insight-tag i-{{ chip.get('value','') }}"{% if chip.get('reason') %} title="{{ chip.reason }}"{% endif %}>{{ chip.label }}</span>{% endif %}{% endfor %}<span class="insight-meta">{{ card.header.get('sources_count',0) }} источников · {{ card.generated_at|local_date }}</span></div>
-<h1 class="page-title insight-title">{{ card.headline.text if card.headline else 'Что событие значит для вашей компании' }}</h1>
-{% if card.headline and card.headline.company %}<p class="page-sub">{{ card.headline.company }} · {{ card.headline.role }}</p>{% endif %}
-{% if card.status != 'ready' %}<div class="insight-notice" role="status">{{ 'Некоторые блоки не удалось подготовить или подтвердить.' if card.status == 'partial' else 'Карточка подготовлена в упрощённом режиме.' }}</div>{% endif %}
-{% if card.headline %}{{ refs(card.headline.get('source_ids',[])) }}{% endif %}
-<section class="card insight-block block-fact"><div class="block-kicker">Подтверждённая информация</div><h2>Что произошло</h2><p>{{ card.fact.text }}</p>
-{% if card.fact.get('decided') %}<h3>Уже решено</h3><ul>{% for text in card.fact.decided %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
-{% if card.fact.get('discussed') %}<h3>Обсуждается</h3><ul>{% for text in card.fact.discussed %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
-{% if card.fact.get('key_figures') %}<div class="insight-figures">{% for figure in card.fact.key_figures %}<div><strong>{{ figure.value }}</strong><span>{{ figure.label }}</span>{{ refs(figure.get('source_ids',[])) }}</div>{% endfor %}</div>{% endif %}{{ refs(card.fact.get('source_ids',[])) }}</section>
-<section class="card insight-block block-bank"><div class="block-kicker">Альфа-Банк</div><h2>Позиция банка</h2>
-{% if card.bank_view.available %}<p>{{ card.bank_view.text or '' }}</p>{% if card.bank_view.material_title %}<p class="note">{{ card.bank_view.material_title }}{% if card.bank_view.material_date %} · {{ card.bank_view.material_date|local_date }}{% endif %}</p>{% endif %}{% if card.bank_view.get('section_title') %}<p class="note">{{ card.bank_view.section_title }}</p>{% endif %}{% if card.bank_view.get('contradicts') %}<p class="insight-notice">Аналитика банка расходится с рассматриваемыми материалами.</p>{% endif %}{% if card.bank_view.get('url')|safe_url %}<a href="{{ card.bank_view.url|safe_url }}" target="_blank" rel="noopener noreferrer">Материал Альфа-Банка ↗</a>{% endif %}{{ refs(card.bank_view.get('source_ids',[])) }}{% else %}<p class="note">{{ card.bank_view.warning or 'Подходящая аналитика банка не найдена.' }}</p>{% endif %}</section>
-{% if card.ai_conclusion %}<section class="card insight-block block-ai"><div class="block-kicker">Вывод AI</div><h2>Влияние на вашу компанию</h2><p>{{ card.ai_conclusion.text }}</p>{% if card.ai_conclusion.get('company_features') %}<h3>Почему это важно</h3><ul>{% for feature in card.ai_conclusion.company_features %}<li>{{ feature.text }}</li>{% endfor %}</ul>{% endif %}{% if card.ai_conclusion.get('channels') %}<p class="note">{{ card.ai_conclusion.channels|join(' · ') }}</p>{% endif %}{{ refs(card.ai_conclusion.get('source_ids',[])) }}</section>{% endif %}
-{% if card.risks %}<div class="insight-risk-grid">{% for key,title in [('risks','Риски'),('opportunities','Возможности')] %}{% if card.risks.get(key) %}<section class="card insight-block"><h2>{{ title }}</h2><ul>{% for item in card.risks.get(key) %}<li>{{ item.text }}{{ refs(item.get('source_ids',[])) }}</li>{% endfor %}</ul></section>{% endif %}{% endfor %}</div>{% endif %}
-{% if card.hypothesis %}<section class="card insight-block block-hypothesis"><div class="block-kicker">Гипотеза</div><h2>На что обратить внимание</h2><p>{{ card.hypothesis.text }}</p><p class="note">{{ card.hypothesis.disclaimer }}</p></section>{% endif %}
-{% if card.actions %}<section class="card insight-block"><h2>Что можно сделать</h2><ol>{% for step in card.actions.get('steps',[]) %}<li>{{ step }}</li>{% endfor %}</ol>{% if card.actions.question %}<p><b>{{ card.actions.question }}</b></p>{% endif %}</section>{% endif %}
-{% if card.bank_offer %}<section class="card insight-block block-bank"><div class="block-kicker">Предложение банка</div><h2>{{ card.bank_offer.name }}</h2><p>{{ card.bank_offer.description }}</p><p class="note">{{ card.bank_offer.reason }}</p>{% if card.bank_offer.get('cta') %}<p><b>{{ card.bank_offer.cta.label }}</b></p>{% endif %}</section>{% endif %}
-<section class="card insight-block"><h2>На чём основан вывод</h2>{% for source in card.evidence.get('sources',[]) %}{{ source_block(source) }}{% endfor %}
+{% set chip_class = {'risk':'risk','opportunity':'opp','neutral':'neutral'} %}
+<div class="card d-head">
+<div class="row">{% for key in ['impact','priority','horizon','reliability'] %}{% set chip = card.header.get(key) %}{% if chip %}<span class="chip {{ chip_class.get(chip.get('value',''), 'plain') }}"{% if chip.get('reason') %} title="{{ chip.reason }}"{% endif %}>{% if key == 'impact' %}<span class="dot"></span>{% endif %}{{ chip.label }}</span>{% endif %}{% endfor %}</div>
+<h1>{{ card.headline.text if card.headline else 'Что событие значит для вашей компании' }}{% if card.headline %}{{ refs(card.headline.get('source_ids',[])) }}{% endif %}</h1>
+<div class="date d-row"><span>{% if card.headline and card.headline.company %}{{ card.headline.company }} · {{ card.headline.role }} · {% endif %}{{ card.header.get('sources_count',0) }} источников · {{ card.generated_at|local_date }}</span></div>
+{% if card.status != 'ready' %}<div class="layer nobank"><div class="lh">⚠ {{ 'Некоторые блоки не удалось подготовить или подтвердить' if card.status == 'partial' else 'Карточка подготовлена в упрощённом режиме' }}</div></div>{% endif %}
+
+<div class="layer fact"><div class="lh">Факт · что произошло</div>
+<p>{{ card.fact.text }}{{ refs(card.fact.get('source_ids',[])) }}</p>
+{% if card.fact.get('decided') %}<p><b>Уже решено:</b></p><ul>{% for text in card.fact.decided %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
+{% if card.fact.get('discussed') %}<p><b>Обсуждается:</b></p><ul>{% for text in card.fact.discussed %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
+{% if card.fact.get('key_figures') %}<div class="feat-chips">{% for figure in card.fact.key_figures %}<span class="chip plain"><b>{{ figure.value }}</b>&nbsp;{{ figure.label }}</span>{% endfor %}</div>{% endif %}</div>
+
+{% if card.bank_view.available %}<div class="layer bank"><div class="lh">Позиция Альфа-Банка · как это оценивает банк{% if card.bank_view.material_title %} <span class="q">{{ card.bank_view.material_title }}{% if card.bank_view.material_date %} · {{ card.bank_view.material_date|local_date }}{% endif %}</span>{% endif %}</div>
+<p>{{ card.bank_view.text or '' }}{{ refs(card.bank_view.get('source_ids',[])) }}</p>
+{% if card.bank_view.get('section_title') %}<div class="quote">{{ card.bank_view.section_title }}</div>{% endif %}
+{% if card.bank_view.get('contradicts') %}<p><b>Аналитика банка расходится с рассматриваемыми материалами.</b></p>{% endif %}
+{% if card.bank_view.get('url')|safe_url %}<a class="lnk" href="{{ card.bank_view.url|safe_url }}" target="_blank" rel="noopener noreferrer">Материал Альфа-Банка →</a>{% endif %}</div>
+{% else %}<div class="layer nobank"><div class="lh">⚠ Аналитика Альфа-Банка по этому событию отсутствует</div>
+<p>{{ card.bank_view.warning or 'Выводы ниже сформированы AI на основе внешних источников и данных о компании. Они не отражают позицию Альфа-Банка.' }}</p></div>{% endif %}
+
+{% if card.ai_conclusion %}<div class="layer ai"><div class="lh">Вывод AI · почему это важно для компании <span class="q">Сформировано AI</span></div>
+<p>{{ card.ai_conclusion.text }}{{ refs(card.ai_conclusion.get('source_ids',[])) }}</p>
+{% if card.ai_conclusion.get('company_features') %}<div class="feat-chips">{% for feature in card.ai_conclusion.company_features %}<span class="chip plain">Признак: {{ feature.text }}</span>{% endfor %}</div>{% endif %}
+{% if card.ai_conclusion.get('channels') %}<p class="hint">{{ card.ai_conclusion.channels|join(' · ') }}</p>{% endif %}</div>{% endif %}
+
+{% if card.risks %}<div class="two">{% for key,title,cls in [('risks','Риски','risk'),('opportunities','Возможности','opp')] %}<div class="ro {{ cls }}"><h4>{{ title }} <span class="chip ai">AI</span></h4><ul>{% for item in card.risks.get(key) or [] %}<li>{{ item.text }}{{ refs(item.get('source_ids',[])) }}</li>{% else %}<li>Не выявлено</li>{% endfor %}</ul></div>{% endfor %}</div>{% endif %}
+
+{% if card.hypothesis %}<div class="layer hyp"><div class="lh">Гипотеза · как может развиваться ситуация <span class="q">Сценарий модели, не прогноз</span></div>
+<p>{{ card.hypothesis.text }}</p>{% if card.hypothesis.disclaimer %}<p class="hint">{{ card.hypothesis.disclaimer }}</p>{% endif %}</div>{% endif %}
+
+{% if card.actions %}<div class="actions"><h4>Что можно сделать</h4>
+{% for step in card.actions.get('steps',[]) %}<label class="check"><input type="checkbox"><span>{{ step }}</span></label>{% endfor %}
+{% if card.actions.question %}<div style="margin-top:8px;font-size:14px;color:var(--muted)"><b style="color:var(--text)">Вопрос для анализа:</b> {{ card.actions.question }}</div>{% endif %}</div>{% endif %}
+
+{% if card.bank_offer %}<div class="offer"><div style="flex:1;min-width:0"><div class="tag">Предложение банка</div><b>{{ card.bank_offer.name }}</b><span>{{ card.bank_offer.description }}</span>
+{% if card.bank_offer.reason %}<details class="why"><summary>Почему мне это предлагают</summary>{{ card.bank_offer.reason }}</details>{% endif %}</div>
+{% if card.bank_offer.get('cta') %}<span class="btn btn-secondary btn-sm">{{ card.bank_offer.cta.label }}</span>{% endif %}</div>{% endif %}
+
+<div class="basis" id="basis"><h4>На чём основан вывод</h4>
+{% for source in card.evidence.get('sources',[]) %}{{ source_block(source) }}{% endfor %}
 {% if card.evidence.get('analytics_material') and card.evidence.analytics_material.id not in card.evidence.get('sources',[])|map(attribute='id')|list %}{{ source_block(card.evidence.analytics_material) }}{% endif %}
-{% if card.evidence.get('company_data') %}<h3>Данные о компании</h3><ul>{% for feature in card.evidence.company_data %}<li id="source-{{ feature.id }}">{{ feature.id }} · {{ feature.text }}</li>{% endfor %}</ul>{% endif %}
-{% if card.evidence.get('trace') %}<details class="insight-trace"><summary>Как получен вывод</summary><ol>{% for step in card.evidence.trace %}<li><b>{{ step.title }}</b><p>{{ step.detail }}</p></li>{% endfor %}</ol></details>{% endif %}</section>
-{% if card.verification.get('comment') %}<p class="note">{{ card.verification.comment }}</p>{% endif %}
+{% if card.evidence.get('company_data') %}<div class="src"><div class="n">⌂</div><div><b>Данные о компании</b>{% for feature in card.evidence.company_data %}<div class="qt" id="source-{{ feature.id }}">{{ feature.id }} · {{ feature.text }}</div>{% endfor %}</div></div>{% endif %}
+{% if card.evidence.get('trace') %}<details class="why"><summary>Как получен вывод</summary><ol>{% for step in card.evidence.trace %}<li><b>{{ step.title }}</b><p>{{ step.detail }}</p></li>{% endfor %}</ol></details>{% endif %}</div>
+
+{% if card.verification.get('comment') %}<p class="hint">{{ card.verification.comment }}</p>{% endif %}
 {% set block_labels = {'headline':'Заголовок','ai_conclusion':'Вывод AI','risks':'Риски и возможности','hypothesis':'Гипотеза','actions':'Рекомендации','bank_offer':'Предложение банка'} %}
-{% for name,check in card.verification.get('blocks',{}).items() %}{% if check.get('status') in ['failed','unverified'] %}<p class="insight-notice">{{ block_labels.get(name, 'Часть карточки') }}: {{ 'не удалось подтвердить' if check.status == 'unverified' else 'блок недоступен' }}.{% for issue in check.get('issues',[]) %} {{ issue.message }}{% endfor %}</p>{% endif %}{% endfor %}
-<p class="note insight-disclaimer">Выводы AI и гипотезы не являются позицией банка. Не является индивидуальной инвестиционной рекомендацией.</p>
+{% for name,check in card.verification.get('blocks',{}).items() %}{% if check.get('status') in ['failed','unverified'] %}<div class="layer nobank"><p>{{ block_labels.get(name, 'Часть карточки') }}: {{ 'не удалось подтвердить' if check.status == 'unverified' else 'блок недоступен' }}.{% for issue in check.get('issues',[]) %} {{ issue.message }}{% endfor %}</p></div>{% endif %}{% endfor %}
+<div class="disclaimer">Выводы AI и гипотезы не являются позицией банка. Не является индивидуальной инвестиционной рекомендацией.</div>
+</div>
 {% endif %}
