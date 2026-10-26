@@ -1,8 +1,10 @@
 
 
 scripts_for_tests/
-dataset/
-                                                                                                                                                                                                     
+data
+data_eval
+data_test
+dataset                                                                                                                                                                                                 
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
