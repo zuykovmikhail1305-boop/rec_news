@@ -19,7 +19,7 @@ HTML формируется через Jinja2; JavaScript обновляет л�
 cd D:/repos/rec_news/services/backend
 uv sync --locked
 # Если .env ещё нет: скопируйте .env.example и укажите реквизиты PostgreSQL.
-uv run --env-file .env python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+uv run --env-file .env scripts/run_api.py
 ```
 
 Откройте [главную](http://127.0.0.1:8000/) или
@@ -31,7 +31,7 @@ Swagger: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 Если используете свой файл, передайте его явно:
 
 ```powershell
-uv run --env-file .env python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+uv run --env-file .env scripts/run_api.py
 ```
 
 `SECRET_KEY` и настройка сессий для запуска не требуются.
@@ -177,8 +177,7 @@ BACKEND_PROCESSING_INTERVAL=15
 BACKEND_ML_NEWS_SCHEMA=ml_news
 ```
 
-Запускайте backend с `uv run --env-file .env python -m uvicorn backend.main:app
---host 127.0.0.1 --port 8000`. Эти настройки включают фоновый монитор в lifespan
+Запускайте backend с `uv run --env-file .env scripts/run_api.py`. Эти настройки включают фоновый монитор в lifespan
 приложения. Он работает без посетителей сайта и каждые 15 секунд проверяет,
 есть ли в таблице ML новости со статусом `new`. Только в этом случае backend
 вызывает `POST /processing.enqueue`. Backend не меняет статусы новостей.
@@ -218,3 +217,16 @@ Remove-Item Env:BACKEND_TEST_DATABASE_URL
 Сам статус `done` не считается подтверждением наличия карточки: если чтение
 неуспешно, интерфейс сообщает, что карточки пока недоступны. Это отображение
 результатов последнего задания, а не восстановление всей истории ленты.
+
+## Адрес и порт HTTP-сервера
+
+В `.env` и `.env.example` заданы `BACKEND_API_HOST=0.0.0.0` и
+`BACKEND_API_PORT=8000`. Запуск: `uv run --env-file .env scripts/run_api.py`.
+Аргументы `--host` и `--port` имеют приоритет над переменными окружения.
+`python -m backend.main` также читает эти переменные. При прямом вызове
+`python -m uvicorn` его адрес и порт задаются собственными флагами Uvicorn.
+
+`0.0.0.0` означает прослушивание всех IPv4-интерфейсов. На своём компьютере
+открывайте `http://127.0.0.1:8000`, с другого — `http://IP_КОМПЬЮТЕРА:8000`.
+`ML_API_URL` остаётся адресом реального ML-сервера, а не `0.0.0.0`.
+Dockerfile использует тот же скрипт; при изменении порта скорректируйте `-p`.
