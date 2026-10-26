@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>Привет, {{ user.full_name or user.email }} 👋</h1>
+  {% if user.profile %}
+  <p class="sub">Анкета заполнена ✅</p>
+  <p><b>Категории:</b> {{ user.profile.categories }}</p>
+  {% if user.profile.activity_description %}<p><b>Деятельность:</b> {{ user.profile.activity_description }}</p>{% endif %}
+  {% if user.profile.fso_execution %}<p><b>Исполнение ФСО:</b> {{ user.profile.fso_execution }}</p>{% endif %}
+  {% if user.profile.previous_sector %}<p><b>Опыт:</b> {{ user.profile.previous_sector }}</p>{% endif %}
+  <p><b>Holding center:</b> {{ 'да' if user.profile.holding_center_employee else 'нет' }}</p>
+  {% if user.profile.service_models %}<p><b>Сервисы:</b> {{ user.profile.service_models }}</p>{% endif %}
+  <div class="footer"><a href="/profile/setup">Редактировать анкету</a> · <a href="/logout">Выйти</a></div>
+  {% else %}
+  <p class="sub">Анкета ещё не заполнена</p>
+  <div class="footer"><a href="/profile/setup">Заполнить анкету →</a> · <a href="/logout">Выйти</a></div>
+  {% endif %}
+</div>
+{% endblock %}

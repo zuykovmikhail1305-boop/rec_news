@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Инсайты · Демонстрация парсера</title>
+  <link rel="stylesheet" href="/static/insights.css">
+  <link rel="stylesheet" href="/static/parser.css">
+</head>
+<body class="parser-body">
+  <main class="parser-page">
+    <header class="parser-header">
+      <div><a class="parser-back" href="/insights/prototype">← К прототипу</a><h1>Как новость становится инсайтом</h1><p>Интерактивная демонстрация воркера news-parser · все события и затраты синтетические</p></div>
+      <div class="run-controls"><span id="run-status" class="run-status idle" role="status" aria-live="polite">Готов к запуску</span><button id="run-button" class="btn btn-primary">▶ Запустить прогон</button><button id="reset-button" class="trace-toggle">Сбросить</button></div>
+    </header>
+
+    <section class="demo-settings" aria-label="Настройки симуляции">
+      <p class="synthetic-notice"><strong>СИНТЕТИЧЕСКОЕ ДЕМО.</strong> Все новости, результаты, счётчики и суммы вымышлены. Реальные тарифы моделей неизвестны; сравнение стоимости не проводилось. Никаких запросов к источникам или LLM.</p>
+      <fieldset id="sources-settings"><legend>Выберите источники (названия — только примеры)</legend>
+        <label><input type="checkbox" name="source" value="Ведомости" checked> Ведомости</label>
+        <label><input type="checkbox" name="source" value="РБК" checked> РБК</label>
+        <label><input type="checkbox" name="source" value="Коммерсантъ" checked> Коммерсантъ</label>
+        <label><input type="checkbox" name="source" value="ТАСС" checked> ТАСС</label>
+        <label><input type="checkbox" name="source" value="Интерфакс" checked> Интерфакс</label>
+        <label><input type="checkbox" name="source" value="Банк России" checked> Банк России</label>
+      </fieldset>
+      <div class="settings-row">
+        <label>Интервал опроса (имитация) <select id="poll-interval"><option value="5">5 минут</option><option value="15" selected>15 минут</option><option value="60">60 минут</option></select></label>
+        <label>Сценарий бюджета <select id="budget-scenario"><option value="normal">Обычный</option><option value="exhausted">Лимит исчерпан</option></select></label>
+      </div>
+      <p id="poll-note"></p>
+      <p>Raw сохранено в памяти демо: <b id="raw-count">0</b> · Отложено до восстановления бюджета: <b id="deferred-count">0</b></p>
+    </section>
+
+    <section class="budget-card" aria-label="Дневной бюджет LLM">
+      <div><span class="eyebrow">Условный бюджет · НЕ реальные расходы</span><strong><span id="budget-used">0</span> ₽ <small>из 500 ₽ / день</small></strong></div>
+      <div class="budget-track"><i id="budget-bar"></i></div>
+      <p id="budget-note">Сбор и дедупликация не используют LLM. Лимит защищает расходы, а сбор продолжится даже после его достижения.</p>
+    </section>
+
+    <section class="pipeline" aria-label="Пайплайн обработки новостей">
+      <article class="stage" data-stage="sources"><div class="stage-number">1</div><div class="stage-icon">◌</div><div><h2>Источники</h2><p>RSS и HTML · по расписанию</p></div><div class="stage-count"><b id="count-sources">6</b><span>источников</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage" data-stage="collect"><div class="stage-number">2</div><div class="stage-icon">↓</div><div><h2>Сбор</h2><p>Нормализация в news_raw</p></div><div class="stage-count"><b id="count-collected">0</b><span>новостей</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage" data-stage="dedupe"><div class="stage-number">3</div><div class="stage-icon">≠</div><div><h2>Дедупликация</h2><p>SHA-256 + fuzzy ≥ 90</p></div><div class="stage-count"><b id="count-unique">0</b><span>уникальных</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage llm" data-stage="gemma"><div class="stage-number">4</div><div class="stage-icon">G</div><div><h2>Gemma</h2><p>Relevance · тариф неизвестен</p></div><div class="stage-count"><b id="count-relevant">0</b><span>релевантных</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage llm" data-stage="qwen"><div class="stage-number">5</div><div class="stage-icon">Q</div><div><h2>Qwen</h2><p>Сущности, теги, summary</p></div><div class="stage-count"><b id="count-enriched">0</b><span>обогащено</span></div><div class="stage-state">Ожидание</div></article>
+      <div class="pipeline-arrow">→</div>
+      <article class="stage llm" data-stage="glm"><div class="stage-number">6</div><div class="stage-icon">AI</div><div><h2>GLM</h2><p>Инсайт для профиля клиента</p></div><div class="stage-count"><b id="count-insights">0</b><span>инсайтов</span></div><div class="stage-state">Ожидание</div></article>
+    </section>
+
+    <section class="demo-grid">
+      <article class="trace-card">
+        <div class="section-title"><div><span class="eyebrow">Трассировка</span><h2>Одна новость — весь путь</h2></div><button id="trace-toggle" class="trace-toggle" aria-expanded="false">Показать детали</button></div>
+        <div class="news-preview"><span class="source-dot"></span><div><b id="trace-source">Пример · синтетическая новость</b><h3>Производители упаковки сообщают о росте цен на сырьё</h3><p>Синтетический заголовок для демонстрации: связана с категорией «производство» в профиле клиента.</p></div><span id="trace-result" class="trace-result">Ожидает прогон</span></div>
+        <div id="trace-details" class="trace-details" hidden>
+          <ol id="trace-log"><li>Запустите симуляцию, чтобы увидеть выполненные шаги.</li></ol>
+          <p class="trace-foot">Это журнал имитации, не запись в реальную БД. Raw остаётся в памяти страницы до сброса, повторного прогона или закрытия.</p>
+        </div>
+      </article>
+
+      <aside class="explain-card"><span class="eyebrow">Правила воркера</span><h2>Что важно на обсуждении</h2><ul><li>Отдельный процесс и планировщик; FastAPI только читает общую БД.</li><li>Эвристика лишь приоритизирует кандидатов — сырые новости не теряются.</li><li>При исчерпании условных 500 ₽ LLM-шаги пропускаются, raw сохраняется, кандидаты откладываются. Возобновление здесь не реализовано.</li><li>Здесь нет сетевых запросов и вызовов моделей: это безопасная имитация.</li></ul><a href="/insights/prototype" class="text-link">Открыть UI инсайтов →</a></aside>
+    </section>
+  </main>
+  <script src="/static/parser.js"></script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!-- Детальная карточка инсайта: слои факт/позиция банка/вывод AI, риски и возможности,
+     гипотеза, действия, предложение банка, основания вывода, фидбек.
+     Токены: [[headerChips]] — приоритет, горизонт, подтверждение,
+            [[title]] / [[meta]] — заголовок и строка «компания · роль · событие»,
+            [[eventType]] / [[eventTitle]] / [[eventFact]] / [[citesHtml]] — блок «Факт»,
+            [[bankLayer]] — слой позиции банка или предупреждение об отсутствии,
+            [[companyName]] / [[concl]] / [[whyChips]] — блок «Вывод AI»,
+            [[risks]] / [[opps]] — списки,
+            [[hyp]] — гипотеза,
+            [[actions]] / [[analysis]] — чекбоксы и вопрос для анализа,
+            [[offer]] — предложение банка (может быть пустым),
+            [[sources]] / [[dataBasis]] — основания,
+            [[fbButtons]] — кнопки фидбека,
+            [[chat]] — чат-панель. -->
+<button class="back" data-nav="insights">← Все инсайты</button>
+<div class="detail-layout"><div>
+  <div class="card d-head">
+    <div class="row">[[headerChips]]</div>
+    <h1>[[title]]</h1>
+    <div class="date">[[meta]]</div>
+
+    <div class="layer fact"><div class="lh">Факт · что произошло <span class="q">[[eventType]]</span></div>
+      <p><b>[[eventTitle]].</b> [[eventFact]][[citesHtml]]</p></div>
+
+    [[bankLayer]]
+
+    <div class="layer ai"><div class="lh">Вывод AI · почему это важно для [[companyName]] <span class="q">Сформировано AI</span></div>
+      <p>[[concl]]</p>
+      <div class="feat-chips">[[whyChips]]</div></div>
+
+    <div class="two">
+      <div class="ro risk"><h4>Риски <span class="chip ai">AI</span></h4><ul>[[risks]]</ul></div>
+      <div class="ro opp"><h4>Возможности <span class="chip ai">AI</span></h4><ul>[[opps]]</ul></div>
+    </div>
+
+    <div class="layer hyp"><div class="lh">Гипотеза · как может развиваться ситуация <span class="q">Сценарий модели, не прогноз</span></div>
+      <p>[[hyp]]</p></div>
+
+    <div class="actions"><h4>Что можно сделать</h4>
+      [[actions]]
+      [[analysis]]
+    </div>
+
+    [[offer]]
+
+    <div class="basis" id="basis"><h4>На чём основан вывод</h4>
+      [[sources]]
+      <div class="src"><div class="n">⌂</div><div><b>Данные о компании</b><div class="qt">[[dataBasis]]</div></div></div>
+      <button class="btn btn-secondary btn-sm" data-act="trace" style="margin-top:8px">Как получен вывод</button>
+    </div>
+
+    <div class="feedback"><span class="lbl">Инсайт был полезен?</span>
+      [[fbButtons]]
+    </div>
+    <div class="disclaimer">Не является индивидуальной инвестиционной рекомендацией. Решения принимаются компанией самостоятельно.</div>
+  </div>
+</div>
+[[chat]]</div>

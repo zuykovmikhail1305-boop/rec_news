@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <span class="badge">Альфа</span>
+  <h1>Регистрация</h1>
+  <p class="sub">Создайте аккаунт, чтобы продолжить</p>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post" action="/register">
+    <label for="full_name">ФИО</label>
+    <input type="text" id="full_name" name="full_name" required>
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" required>
+    <label for="password">Пароль</label>
+    <input type="password" id="password" name="password" required minlength="6">
+    <button type="submit">Зарегистрироваться</button>
+  </form>
+</div>
+<div class="footer">Уже есть аккаунт? <a href="/login">Войти</a></div>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "demo_base.html" %}
+{% block title %}Инсайты · Бизнес Онлайн{% endblock %}
+{% block body %}
+<div class="app">
+<aside class="side"><div class="brand"><div class="brand-mark">А</div><div>Бизнес Онлайн<small>демонстрационный сервис</small></div></div>
+<nav class="nav"><a class="active" href="/?user_id={{ user_id|urlencode }}" aria-current="page">Инсайты</a><a href="#company">Профиль компании</a><a href="/profiles">Сменить профиль</a></nav>
+<div class="side-foot">Демонстрационные профили компаний.</div></aside>
+<div class="main"><header class="top"><div class="demo-current"><b>{{ details.profile.company_name if details else 'Профиль компании' }}</b><span>{{ details.profile.role if details else user_id }}</span></div>
+<div class="top-right"><span class="proto-pill">Демо</span><a class="demo-switch" href="/profiles">Сменить профиль</a>
+</div></header>
+<main class="content">
+{% if details %}
+<div class="demo-eyebrow">Профиль {{ details.user_id }}</div><h1 class="page-title">Инсайты для вашей компании</h1><p class="page-sub">{{ details.profile.company_name or 'Компания' }} · {{ details.profile.role }}</p>
+<section class="live-insights" data-insights-root data-user-id="{{ user_id }}" data-offset="{{ offset }}">
+<div class="insights-live-heading"><div><h2>События и их влияние на бизнес</h2><p>Готовые карточки появляются по мере подготовки.</p></div><button type="button" class="btn btn-secondary btn-sm" data-retry-insights>Обновить</button></div>
+<p class="live-message" data-insights-message role="status" aria-live="polite"></p>
+<div data-insights-feed>{% include "insights_live_feed.html" %}</div>
+</section>
+<details class="company-overview"><summary>Профиль и контекст компании</summary>
+<div class="demo-stats">
+<div class="card"><span>Новости в ленте</span><strong>{{ details.activity.get('feed_total', 0) }}</strong><small>{{ 'Лента подготовлена' if details.activity.get('feed_status') == 'ready' else 'Подбор ещё не завершён' }}</small></div>
+<div class="card"><span>Карточки инсайтов</span><strong>{{ details.activity.get('insight_cards', 0) }}</strong><small>Подготовленные материалы</small></div>
+<div class="card"><span>Чат с аналитиком</span><strong class="demo-stat-word">{{ 'Есть история' if details.activity.get('chat_session_id') else 'Новый диалог' }}</strong><small>Для выбранного профиля</small></div>
+</div>
+<div class="demo-columns">
+<section class="card" id="company"><h2>Профиль компании</h2>
+<dl class="demo-details"><div><dt>Компания</dt><dd>{{ details.profile.company_name or 'Не указана' }}</dd></div><div><dt>Роль</dt><dd>{{ details.profile.role }}</dd></div><div><dt>Отрасль</dt><dd>{{ details.profile.industry or 'Не указана' }}</dd></div><div><dt>Код компании</dt><dd>{{ details.profile.company_id or 'Не указана' }}</dd></div></dl>
+{% if details.profile.company_description %}<p class="demo-description">{{ details.profile.company_description }}</p>{% endif %}
+{% if details.profile.regions %}<p><b>Регионы:</b> {{ details.profile.regions|join(', ') }}</p>{% endif %}
+{% if details.profile.products %}<p><b>Продукты:</b> {{ details.profile.products|join(', ') }}</p>{% endif %}
+</section>
+<section class="card"><h2>Контекст бизнеса</h2>
+{% if details.company_facts %}<ul class="demo-facts">{% for fact in details.company_facts %}<li>{{ fact.get('text', '') }}{% if fact.get('origin') %}<small>{{ fact.origin }}</small>{% endif %}</li>{% endfor %}</ul>{% else %}<p class="note">Дополнительные сведения о компании пока не подготовлены.</p>{% endif %}
+</section></div>
+{% if details.interests.get('aspects') %}<section class="card demo-topics"><h2>Что важно для компании</h2><ul class="demo-facts">{% for aspect in details.interests.aspects %}<li><b>{{ aspect.get('title', '') }}</b>{% if aspect.get('description') %}<p>{{ aspect.description }}</p>{% endif %}</li>{% endfor %}</ul></section>{% endif %}
+</details>
+{% else %}<div class="empty-state card" role="alert"><h1>Данные временно недоступны</h1><p>Не удалось получить профиль компании. Попробуйте ещё раз или выберите другую компанию.</p><a class="btn btn-primary" href="/?user_id={{ user_id|urlencode }}">Попробовать ещё раз</a></div>{% endif %}
+</main></div></div>{% endblock %}
+
+{% block scripts %}{% if details %}<script src="/static/live-insights.js" defer></script>{% endif %}{% endblock %}

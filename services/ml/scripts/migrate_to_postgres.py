@@ -5,6 +5,8 @@
                                                           # (только векторы — scripts/qdrant_to_server.py)
     python scripts/migrate_to_postgres.py --replace       # перед копированием очистить таблицы PostgreSQL
     python scripts/migrate_to_postgres.py --skip-dataset  # без датасета (платежи — 1,4 млн строк)
+    python scripts/migrate_to_postgres.py --tables profiles analytics_materials analytics_chunks
+                                                          # только эти таблицы, остальные — пустые
 
 Куда — ``REC_NEWS_DATABASE_URL`` (и ``REC_NEWS_DB_SCHEMA_PREFIX``) из ``.env`` или окружения: каждая база
 становится схемой (``data/news.db`` → ``ml_news``…, см. ``news_pipeline/storage/db.py``). Откуда — файлы
@@ -39,6 +41,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--replace", action="store_true", help="очистить таблицы PostgreSQL перед копированием")
     parser.add_argument("--skip-dataset", action="store_true", help="не переносить датасет")
     parser.add_argument("--qdrant", action="store_true", help="перенести векторы из data/qdrant в Qdrant-сервер")
+    parser.add_argument("--tables", nargs="+", metavar="ТАБЛИЦА",
+                        help="переносить строки только этих таблиц (profiles, analytics_chunks…); остальные таблицы "
+                             "создаются пустыми. Датасет — отдельно (--skip-dataset)")
     return parser.parse_args()
 
 
@@ -99,8 +104,8 @@ def main() -> int:
             continue
         source = create_engine(f"sqlite:///{source_path.resolve()}", poolclass=NullPool)
         present = set(inspect(source).get_table_names())
-        report = [f"{model.__tablename__} {copy_model(source, model, bind)}"
-                  for model in database.models if model.__tablename__ in present]
+        report = [f"{model.__tablename__} {copy_model(source, model, bind)}" for model in database.models
+                  if model.__tablename__ in present and (not args.tables or model.__tablename__ in args.tables)]
         source.dispose()
         print(f"   ✓ {source_path.name} → {db.schema_name(database.path)}: " + (", ".join(report) or "пусто"))
 

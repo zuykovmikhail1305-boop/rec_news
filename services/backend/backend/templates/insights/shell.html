@@ -1,0 +1,37 @@
+<!-- Каркас приложения: сайдбар с навигацией, шапка со свитчером компаний,
+     демо-баннер и контейнер текущей страницы [[inner]].
+     Токены: [[nav]] / [[navBottom]] — пункты бокового меню,
+            [[menuIcon]] / [[bellIcon]] — иконки,
+            [[companyShort]] / [[companyName]] / [[companyRole]] — активная организация,
+            [[dropdownItems]] — пункты свитчера,
+            [[userIni]] / [[userCall]] — текущий пользователь,
+            [[banner]] — демо-баннер (пусто вне разделов прототипа),
+            [[inner]] — HTML текущего экрана. -->
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand"><div class="brand-mark">А</div><div>Бизнес Онлайн<small>прототип</small></div></div>
+    <nav class="nav">
+      [[nav]]
+      <div style="height:14px"></div>
+      [[navBottom]]
+    </nav>
+    <div class="side-foot">Все данные демонстрационные. Не является инвестиционной рекомендацией.</div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <button class="menu-btn" data-act="menu" aria-label="Меню">[[menuIcon]]</button>
+      <div class="switcher"><button class="switcher-btn" data-act="sw"><div class="ava" style="border-radius:9px;background:#F1F2F4">[[companyShort]]</div><div style="min-width:0"><b>[[companyName]]</b><span>[[companyRole]]</span></div><span style="color:#9AA4AE">▾</span></button>
+        <div class="dropdown hidden" id="dd">
+          [[dropdownItems]]
+        </div></div>
+      <div class="top-right">
+        <span class="proto-pill">Прототип · хакатон</span>
+        <button class="icon-btn" aria-label="Уведомления">[[bellIcon]]</button>
+        <div class="user-chip"><div class="ava">[[userIni]]</div><span class="nm">[[userCall]]</span></div>
+        <button class="btn btn-ghost btn-sm" data-act="logout">Выйти</button>
+      </div>
+    </header>
+    [[banner]]
+    <main class="content">[[inner]]</main>
+  </div>
+</div>

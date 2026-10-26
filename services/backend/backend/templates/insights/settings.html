@@ -1,0 +1,27 @@
+<!-- «Настройки инсайтов»: роль в компаниях, формат подачи, темы, используемые данные.
+     Токены: [[roleRows]] — выбор роли по каждой компании,
+            [[modeButtons]] — режим «Компактно/Подробно»,
+            [[call]] — обращение,
+            [[digestSelect]] — выбор канала дайджеста,
+            [[topicRows]] — тумблеры тем,
+            [[dataRows]] — тумблеры используемых данных. -->
+<h1 class="page-title">Настройки инсайтов</h1><p class="page-sub">Что и как вам показывать. Факты и позиция банка от этих настроек не меняются.</p>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">
+<div class="card"><h3 style="margin:0 0 6px;font-size:17px">Роль в компаниях</h3>
+  [[roleRows]]
+</div>
+<div class="card"><h3 style="margin:0 0 6px;font-size:17px">Формат подачи</h3>
+  <div class="set-row"><div class="t"><b>Режим</b><span>Подобран автоматически, можно изменить</span></div>
+    <div class="seg">[[modeButtons]]</div></div>
+  <div class="set-row"><div class="t"><b>Обращение</b><span>[[call]]</span></div></div>
+  <div class="set-row"><div class="t"><b>Дайджест</b><span>Push только для высокого приоритета</span></div>
+    [[digestSelect]]</div>
+  <p class="note">Возраст и пол используются только для обращения и плотности подачи по умолчанию. На выбор событий и выводы они не влияют.</p>
+</div>
+<div class="card"><h3 style="margin:0 0 6px;font-size:17px">Темы</h3>
+  [[topicRows]]
+</div>
+<div class="card"><h3 style="margin:0 0 6px;font-size:17px">Какие данные используются</h3>
+  [[dataRows]]
+  <p class="note">В языковую модель передаются только агрегированные признаки, без реквизитов и персональных данных.</p>
+</div></div>

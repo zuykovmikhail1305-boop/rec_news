@@ -1,0 +1,14 @@
+<!-- Экран «Вход»: логин/пароль физического лица + тестовые учётные записи.
+     Токены: [[login]] — логин выбранного тестового пользователя,
+            [[demoUsers]] — список тестовых аккаунтов (HTML). -->
+<div class="auth"><div class="auth-card">
+  <div class="brand"><div class="brand-mark">А</div><div>Бизнес Онлайн<small>Прототип для хакатона · данные демо</small></div></div>
+  <h1>Вход в интернет-банк</h1><p class="sub">Логин и пароль физического лица</p>
+  <div class="field"><label>Логин</label><input id="lg" value="[[login]]" autocomplete="off"></div>
+  <div class="field"><label>Пароль</label><input id="pw" type="password" value="demo-demo" autocomplete="off"></div>
+  <button class="btn btn-primary btn-block" data-act="login">Войти</button>
+  <div class="demo-users"><h4>Тестовые учётные записи</h4>
+    [[demoUsers]]
+  </div>
+  <p class="note">Прототип работает локально: логин, пароль и код никуда не отправляются.</p>
+</div></div>

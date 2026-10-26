@@ -1,0 +1,8 @@
+<!-- Чат-панель «Спросить про это событие».
+     Токены: [[messages]] — история сообщений (HTML),
+            [[suggButtons]] — кнопки-подсказки вопросов,
+            [[sendIcon]] — иконка отправки. -->
+<aside class="chat"><div class="chat-h"><b><span class="chip ai">AI</span>Спросить про это событие</b><span>Отвечает по материалам карточки и источникам</span></div>
+  <div class="chat-body" id="cb">[[messages]]</div>
+  <div class="sugg">[[suggButtons]]</div>
+  <div class="chat-in"><input id="ci" placeholder="Ваш вопрос"><button data-act="ask" aria-label="Отправить">[[sendIcon]]</button></div></aside>

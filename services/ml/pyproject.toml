@@ -28,3 +28,8 @@ dependencies = [
 dev = [
     "easyocr>=1.7.2",
 ]
+
+[tool.uv.workspace]
+members = [
+    "mp",
+]

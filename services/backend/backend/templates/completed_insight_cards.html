@@ -1,0 +1,7 @@
+<div class="insight-feed">{% for card in completed_cards %}
+<article class="card insight-preview">
+<div class="insight-meta"><span>Готовый инсайт</span>{% if card.status != 'ready' %}<span class="insight-tag">{{ 'Частично подготовлен' if card.status == 'partial' else 'Упрощённый режим' }}</span>{% endif %}</div>
+<h3><a href="/insights/{{ card.news_id|path_id }}?user_id={{ user_id|urlencode }}">{{ card.headline.get('text') if card.headline and card.headline.get('text') else card.fact.get('text', 'Инсайт')|truncate(120) }}</a></h3>
+<p>{{ card.fact.get('text', '')|truncate(250) }}</p>
+<div class="insight-preview-footer"><a class="insight-open" href="/insights/{{ card.news_id|path_id }}?user_id={{ user_id|urlencode }}">Открыть инсайт →</a></div>
+</article>{% endfor %}</div>
