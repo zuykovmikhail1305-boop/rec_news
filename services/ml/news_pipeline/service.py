@@ -253,18 +253,19 @@ class MLService:
         runs = self.user_news_store.queued_runs()
         for run in runs:
             demo_now = datetime.fromisoformat(run["demo_now"]) if run.get("demo_now") else None
-            self.queue.publish(PROCESSING_QUEUE, ProcessingTask(run_id=run["run_id"], now=demo_now).dumps())
+            # список пользователей запуска не хранится: заново — только обработка новостей, ленты — при входе
+            self.queue.publish(PROCESSING_QUEUE, ProcessingTask(run_id=run["run_id"], now=demo_now, user_ids=[]).dumps())
         return len(runs)
 
     def enqueue_processing(self) -> tuple[int, bool]:
         """Ставит в обработку новости ``news.db`` со статусом ``new`` (``POST /processing.enqueue``).
 
         Обработка идёт в воркере очереди (:meth:`start_run`): статус новостей ``new → processing →
-        ready``, затем пересчитываются ленты пользователей. Возвращает, сколько новостей ждало
+        ready``; ленты не пересчитываются — их собирает вход пользователя (news.rebuild). Возвращает, сколько новостей ждало
         обработки, и создан ли новый запуск (``False`` — обработка уже стоит в очереди или идёт).
         """
         waiting = status_counts(NEWS_DB, "news")["new"]
-        _, created = self.start_run()
+        _, created = self.start_run(user_ids=[])   # ленты собираются при входе пользователя (news.rebuild)
         return waiting, created
 
     def processing_result(self) -> bool:
@@ -291,7 +292,7 @@ class MLService:
                                  news_unique=sum(result is None for result in results))
                 matched = self.match_pending_events()
                 store.update_run(run_id, stage="recommend", events_matched=matched)
-            users = user_ids or self.profiles.all_ids()
+            users = self.profiles.all_ids() if user_ids is None else user_ids   # [] — только обработка новостей
             store.update_run(run_id, users_total=len(users))
             done = failed = 0
             for user_id in users:
