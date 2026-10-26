@@ -1,7 +1,6 @@
 """Atomic handoff into the ML-owned PostgreSQL input table; no ML inference here."""
 import json
 from datetime import timezone
-from hashlib import sha256
 from urllib.parse import urlsplit
 
 from sqlalchemy import Column, MetaData, Table, Text, inspect
@@ -43,7 +42,7 @@ def export_publication(db, publication):
         return None
     db.flush()
     source_code = publication.source.code
-    document_id = "parser:" + source_code + ":" + sha256(publication.url.encode("utf-8")).hexdigest()
+    document_id = str(publication.id)  # числовой ID публикации (news_raw.id) — один ID во всех сервисах
     created_at = as_utc(publication.fetched_at)
     payload = dict(document_id=document_id, text=publication.text, title=publication.title,
         url=publication.url, source=urlsplit(publication.url).hostname,
