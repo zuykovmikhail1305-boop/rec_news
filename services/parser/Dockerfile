@@ -10,5 +10,4 @@ RUN uv sync --locked
 
 COPY . .
 
-#ENTRYPOINT uv run scripts/run_api.py
-ENTRYPOINT "scripts/run.sh"
+ENTRYPOINT ["sh", "scripts/run.sh"]

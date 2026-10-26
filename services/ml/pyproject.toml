@@ -20,6 +20,7 @@ dependencies = [
     "qdrant-client>=1.19.1",
     "razdel>=0.5.0",
     "sentence-transformers>=6.1.0",
+    "torch>=2.14.1",   # эмбеддинги (sentence-transformers); на Linux — CPU-сборка, см. [tool.uv.sources]
     "sqlalchemy>=2.0",
     "uvicorn>=0.54.0",
 ]
@@ -33,3 +34,13 @@ dev = [
 members = [
     "mp",
 ]
+
+# torch без CUDA на Linux (Docker): GPU в контейнер не пробрасывается, а CUDA-сборка добавляет ~3–4 ГБ.
+# На Windows и macOS torch ставится с PyPI как раньше.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
