@@ -9,15 +9,16 @@
 {% elif job.status == 'failed' %}<b>Не удалось подготовить инсайты</b><span>Нажмите «Обновить», чтобы повторить.</span>
 {% elif job.status == 'cancelled' %}<b>Подготовка остановлена</b>{% endif %}
 </div>
-{% set impact_chip = {'risk':('risk','Риск'),'opportunity':('opp','Возможность')} %}
-{% for item in ready %}{% set chip = impact_chip.get(item.insight.impact, ('neutral','Нейтрально')) %}
-<a class="icard" href="/insights/{{ item.news_id|path_id }}?user_id={{ user_id|urlencode }}">
-<div class="meta"><span class="chip {{ chip[0] }}"><span class="dot"></span>{{ chip[1] }}</span>
-{% if item.analytics %}<span class="chip bank">Есть позиция Альфа Ресерч</span>{% else %}<span class="chip nobank">Аналитики банка нет</span>{% endif %}
-{% if item.insight.status != 'ready' %}<span class="chip plain">{{ 'Частично подготовлен' if item.insight.status == 'partial' else 'Упрощённый режим' }}</span>{% endif %}</div>
-<h3>{{ item.insight.headline or item.title }}</h3>
-<div class="foot">{% if item.published_at %}<span>{{ item.published_at|local_date }}</span>{% endif %}<span>Открыть инсайт →</span></div>
-</a>{% endfor %}
-{% if not ready and completed_cards %}{% include 'completed_insight_cards.html' %}
-{% elif not ready and feed and feed.status == 'ready' and not feed.items %}<div class="empty">Для этой компании не нашлось подходящих новостей.</div>
+{% if ready %}
+<div class="insight-feed">{% for item in ready %}
+<article class="card insight-preview">
+<div class="insight-meta"><span class="insight-tag i-{{ item.insight.impact }}">{{ {'risk':'Риск','opportunity':'Возможность','neutral':'Нейтрально'}.get(item.insight.impact, 'Инсайт') }}</span>
+{% if item.insight.status != 'ready' %}<span class="insight-tag">{{ 'Частично подготовлен' if item.insight.status == 'partial' else 'Упрощённый режим' }}</span>{% endif %}
+{% if item.published_at %}<time>{{ item.published_at|local_date }}</time>{% endif %}</div>
+<h3><a href="/insights/{{ item.news_id|path_id }}?user_id={{ user_id|urlencode }}">{{ item.insight.headline or item.title }}</a></h3>
+<div class="insight-preview-footer">{% if item.analytics %}<span class="insight-tag i-bank">Есть аналитика Альфа-Банка</span>{% endif %}
+<a class="insight-open" href="/insights/{{ item.news_id|path_id }}?user_id={{ user_id|urlencode }}">Открыть инсайт →</a></div>
+</article>{% endfor %}</div>
+{% elif completed_cards %}{% include 'completed_insight_cards.html' %}
+{% elif feed and feed.status == 'ready' and not feed.items %}<div class="card empty-state"><h3>Пока нет событий</h3><p>Для этой компании не нашлось подходящих новостей.</p></div>
 {% endif %}

@@ -1,10 +1,10 @@
-{% extends "demo_shell.html" %}
-{% block title %}Инсайт · Альфа-Бизнес{% endblock %}
-{% block main %}
-<main class="content" data-insight-detail data-user-id="{{ user_id }}" data-news-id="{{ news_id }}" data-poll="{{ 'true' if card_state == 'pending' else 'false' }}">
-<a class="back" href="/?user_id={{ user_id|urlencode }}">← Все инсайты</a>
+{% extends "demo_base.html" %}
+{% block title %}Инсайт · Бизнес Онлайн{% endblock %}
+{% block body %}<div class="app"><aside class="side"><div class="brand"><div class="brand-mark">А</div><div>Бизнес Онлайн<small>демонстрационный сервис</small></div></div><nav class="nav"><a class="active" href="/?user_id={{ user_id|urlencode }}">Инсайты</a><a href="/profiles">Сменить профиль</a></nav><div class="side-foot">Факты, позиция банка и выводы AI показаны отдельно.</div></aside>
+<div class="main"><header class="top"><a class="insight-back" href="/?user_id={{ user_id|urlencode }}">← Все инсайты</a><div class="top-right"><span class="proto-pill">Демо</span></div></header>
+<main class="content insight-detail" data-insight-detail data-user-id="{{ user_id }}" data-news-id="{{ news_id }}" data-poll="{{ 'true' if card_state == 'pending' else 'false' }}">
 <div data-insight-card>{% include "insights_live_card.html" %}</div>
 <p class="live-message" data-card-message role="status" aria-live="polite"></p>
-<button type="button" class="btn btn-secondary btn-sm" data-retry-insights>Обновить карточку</button>
-</main>{% endblock %}
+<button type="button" data-retry-insights>Обновить карточку</button>
+</main></div></div>{% endblock %}
 {% block scripts %}<script src="/static/live-insights.js" defer></script>{% endblock %}
