@@ -70,6 +70,7 @@ class PostgresIntegrationTests(unittest.TestCase):
             self.assertIsNone(ml.publication_time)  # date-only source: do not invent a timestamp
             import json
             self.assertEqual(json.loads(ml.extra)["parser"]["raw_id"], raw_id)
+            self.assertEqual(ml.document_id, str(raw_id))  # ID новости в ML — числовой ID публикации
             document_id = ml.document_id
         with self.engine.begin() as connection:
             connection.execute(update(self.ml_table).values(status="processing"))

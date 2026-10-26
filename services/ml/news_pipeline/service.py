@@ -101,6 +101,7 @@ class MLService:
             source_database_path=SUMMARY_DB, unique_database_path=UNIQUE_DB, use_llm=self.use_llm, verbose=False
         )
         self.feed = FeedBuilder(self.dedup.index, llm=self.llm, use_llm=self.use_llm)
+        self.feed.company_text = self._company_text   # сигнал industry ленты
         self.analytics = AnalyticsMatcher(
             client=self.dedup.index.client, model=self.dedup.index.model, llm=self.llm, use_llm=self.use_llm
         )
@@ -426,6 +427,15 @@ class MLService:
         return insert_news(NEWS_DB, stored, ignore_existing=True)
 
     # --- профили --------------------------------------------------------------
+
+    def _company_text(self, user_id: str) -> str | None:
+        """Отрасль и описание компании из анкеты — для сигнала industry ленты."""
+        user = self.profiles.get_input(user_id)
+        if user is None:
+            return None
+        parts = [f"Отрасль: {user.industry}" if user.industry else "", user.company_description or ""]
+        return ". ".join(part for part in parts if part) or None
+
 
     def dataset(self) -> tuple[Any, Any]:
         """Компании и платежи из ``dataset/*.db`` (читаются один раз; платежей 1,4 млн — несколько секунд)."""

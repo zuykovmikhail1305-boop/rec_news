@@ -131,8 +131,8 @@ python -m unittest discover -s tests -p 'test_news_schema.py' -v
 но не создаёт частичную копию и не изменяет её схему. Сначала выполните инициализацию
 ML на общей БД, затем `services/parser/scripts/init_db.py` на той же БД.
 
-- `document_id` — `parser:{source_code}:{SHA256(canonical_url)}`, стабилен при повторе
-  и переносе БД, не зависит от локального числового ID.
+- `document_id` — числовой ID публикации (`news_raw.id`) строкой, например `1542`; повторная
+  передача той же публикации даёт тот же ID.
 - Передаются полный `text`, `title`, канонический `url`, домен `source`, точное
   `publication_time` при наличии времени, время поступления `created_at` и `status=new`.
 - В JSON `extra.parser` сохраняются `raw_id`, код источника, хеш текста,

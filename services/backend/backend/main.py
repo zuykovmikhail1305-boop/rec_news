@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,8 +9,9 @@ from fastapi.staticfiles import StaticFiles
 
 if __package__:
     from .routes import router
-else:
-    from routes import router
+else:  # запуск файлом (uv run main.py): модули грузятся как пакет backend — в processing.py относительные импорты
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from backend.routes import router
 
 @asynccontextmanager
 async def lifespan(app):

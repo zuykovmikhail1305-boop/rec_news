@@ -63,7 +63,7 @@ Celery + RabbitMQ, PostgreSQL и Qdrant-сервер — переменные `R
 |---|---|
 | `news_pipeline/` | код: конвейер новостей, аналитика, профили, ленты, карточки инсайтов, очередь задач, хранение |
 | `scripts/` | запуск API, инициализация баз, перенос в PostgreSQL и векторов в Qdrant-сервер, загрузка демо-данных, остаток бюджета LLM |
-| `scripts_for_tests/` | размеченный набор (`make_eval_set*.py`), подготовка новостей (`prepare_eval_news.py`) и оценка лент по разметке (`eval_feed.py`) |
+| `scripts_for_tests/` | проверка качества на размеченном наборе: пересборка новостей (`rebuild_eval_news.py`), лент (`rebuild_eval_feeds.py`), оценка лент (`eval_feed.py`); создание набора (`make_eval_set*.py`), агент (`eval_agent.py`) |
 | `docs/` | `api.md` и `openapi.json` — ручки и контракт; `architecture.md` — как работают компоненты; `broker.md` — Celery, RabbitMQ, PostgreSQL и обмен с другими сервисами; `insight_card.md`, `insight_jobs.md`, `news_db.md` |
 
 ## Ручки
