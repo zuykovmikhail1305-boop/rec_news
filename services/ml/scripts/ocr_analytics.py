@@ -34,18 +34,16 @@ def pdf_pages(path: Path):
         yield text, images
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--only", help="подстрока имени файла")
-    parser.add_argument("--force", action="store_true", help="пересчитать готовые файлы")
-    args = parser.parse_args()
+def recognize(only: str | None = None, force: bool = False) -> list[Path]:
+    """PDF из ``texts/`` → ``fixtures/analytics/<имя>.txt``; возвращает файлы, распознанные сейчас."""
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     reader = None
+    done = []
     for pdf in sorted(TEXTS_DIR.glob("*.pdf")):
-        if args.only and args.only not in pdf.name:
+        if only and only not in pdf.name:
             continue
         target = OUT_DIR / f"{pdf.stem}.txt"
-        if target.exists() and not args.force:
+        if target.exists() and not force:
             print(f"{pdf.name}: уже распознан")
             continue
         started = time.monotonic()
@@ -66,7 +64,17 @@ def main() -> None:
                 text = "\n\n".join(part.strip() for part in parts if part.strip())
             pages.append(f"=== стр. {number} ===\n{text}")
         target.write_text("\n\n".join(pages), encoding="utf-8")
+        done.append(target)
         print(f"{pdf.name}: {len(pages)} стр., {sum(map(len, pages))} симв., {time.monotonic() - started:.0f} с", flush=True)
+    return done
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--only", help="подстрока имени файла")
+    parser.add_argument("--force", action="store_true", help="пересчитать готовые файлы")
+    args = parser.parse_args()
+    recognize(args.only, args.force)
 
 
 if __name__ == "__main__":
