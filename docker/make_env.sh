@@ -12,7 +12,8 @@ OUT=.env
 FORCE=${1:-}
 PASSWORD=${DB_PASSWORD:-rec_news}
 DB_URL="postgresql+psycopg://rec_news:${PASSWORD}@db:5432/rec_news"
-BROKER_URL="amqp://guest:guest@rabbitmq:5672//"
+# пользователь и vhost — как у сервиса rabbitmq в compose.yml (guest там нет и он пускает только с localhost)
+BROKER_URL="amqp://parser:parser_local@rabbitmq:5672/rec_news"
 
 mkdir -p "$OUT"
 
@@ -44,7 +45,8 @@ make ml.env services/ml/.env \
     "REC_NEWS_BROKER_URL=$BROKER_URL" \
     "REC_NEWS_API_HOST=0.0.0.0" \
     "REC_NEWS_API_PORT=8002" \
-    "REC_NEWS_MODELS_DIR=/usr/src/app/models"
+    "REC_NEWS_MODELS_DIR=/usr/src/app/models" \
+    "REC_NEWS_DEMO_NOW="   # пусто = реальное время: свежие новости парсера попадают в ленты
 
 make parser.env services/parser/.env \
     "PARSER_DATABASE_URL=$DB_URL" \
