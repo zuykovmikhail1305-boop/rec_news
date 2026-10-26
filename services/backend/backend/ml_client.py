@@ -113,6 +113,11 @@ class ProcessingResult(BaseModel):
     result: bool
 
 
+class ProcessingRun(BaseModel):
+    run_id: str
+    status: str
+
+
 class ProcessingJob(BaseModel):
     status: Literal["accepted", "already_running"]
     news: int = Field(ge=0)
@@ -162,10 +167,23 @@ class MLClient:
     def enqueue_processing(self):
         return self._request("POST", "/processing.enqueue", ProcessingJob)
 
-    def generate_insights(self, user_id, *, news_ids=None):
+    def ensure_profile(self, user_id, *, role, company):
+        """Профиль «роль + компания» в ML: строится при первом входе, дальше берётся готовый."""
+        body = {"role": role, "company_id": company.company_id, "company_name": company.company_name,
+                "industry": company.industry, "company_description": company.company_description}
+        # построение профиля (аспекты через LLM) дольше обычного запроса
+        return self._request("PUT", "/profiles/" + quote(user_id, safe=""), ProfileDetails, json=body, timeout=120)
+
+    def rebuild_news(self, user_id):
+        """Подбор новостей только этому пользователю (запуск processing.run в ML)."""
+        return self._request("POST", "/users/" + quote(user_id, safe="") + "/news.rebuild", ProcessingRun)
+
+    def generate_insights(self, user_id, *, news_ids=None, limit=None):
         body = {"refresh": False}
         if news_ids is not None:
             body["news_ids"] = news_ids
+        if limit is not None:
+            body["limit"] = limit
         return self._owned(self._request("POST", "/users/" + quote(user_id, safe="") + "/insights/generate",
                                         InsightJob, json=body), user_id)
 

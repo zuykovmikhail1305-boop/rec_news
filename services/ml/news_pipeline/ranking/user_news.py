@@ -151,6 +151,16 @@ class UserNewsStore:
                 session.add(run)
         return db.as_dict(run), created
 
+    def create_run(self, demo_now: datetime | None) -> dict[str, Any]:
+        """Новый запуск (``queued``) без проверки, идёт ли другой: подбор для отдельных пользователей.
+        Запуски выполняет одна очередь processing.run — по одному."""
+        with db.session(self.engine) as session:
+            run = PipelineRunRow(run_id=f"run_{datetime.now(timezone.utc):%Y%m%d_%H%M%S}_{uuid.uuid4().hex[:6]}",
+                                 status="queued", requested_at=now_iso(),
+                                 demo_now=demo_now.isoformat() if demo_now else None)
+            session.add(run)
+        return db.as_dict(run)
+
     def active_run(self, timeout_hours: float) -> dict[str, Any] | None:
         """Запуск, который стоит в очереди или идёт; ``None`` — обработка не идёт."""
         with db.session(self.engine) as session:

@@ -227,6 +227,16 @@ class MLService:
     def _run_timeout_hours() -> float:
         return float(SETTINGS.recommendations.get("run_timeout_hours", 3))
 
+    def start_user_run(self, user_id: str, *, now: datetime | None = None) -> PipelineRun:
+        """Подбор новостей одному пользователю (вход в демо): тот же запуск processing.run, но лента
+        пересчитывается только у него — быстро, а не для всех профилей. ``KeyError`` — профиля нет."""
+        if self.profiles.get(user_id) is None:
+            raise KeyError(user_id)
+        now = now or DEMO_NOW
+        run = self.user_news_store.create_run(now)
+        self.queue.publish(PROCESSING_QUEUE, ProcessingTask(run_id=run["run_id"], now=now, user_ids=[user_id]).dumps())
+        return PipelineRun(**run)
+
     def handle_processing(self, body: bytes) -> None:
         """Обработчик задачи ``processing.run``. Повторная доставка (запуск уже взят или завершён) пропускается."""
         task = ProcessingTask.loads(body)

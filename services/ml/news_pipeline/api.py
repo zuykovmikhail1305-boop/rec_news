@@ -28,7 +28,7 @@ from news_pipeline.agent import AgentAnswer, ChatHistory, UserChatMessage
 from news_pipeline.config import DEMO_NOW
 from news_pipeline.env import env_flag
 from news_pipeline.insights.schemas import InsightCard
-from news_pipeline.schemas import ProfileDetails, ProfileList, UserNewsResponse
+from news_pipeline.schemas import PipelineRun, ProfileDetails, ProfileList, UserNewsResponse, UserProfileIn
 from news_pipeline.service import MLService
 from news_pipeline.tasks.insight_jobs import NothingToGenerate
 from news_pipeline.tasks.schemas import InsightJob, InsightJobRequest
@@ -110,6 +110,35 @@ def get_profile(user_id: str) -> ProfileDetails:
 
 
 # --- новости пользователя ------------------------------------------------------------
+
+
+class ProfileIn(BaseModel):
+    """Анкета для профиля «роль + компания»; ``company_id`` — компания в датасете (``SYNTHETIC_U``)."""
+
+    role: str
+    company_id: str | None = None
+    company_name: str | None = None
+    industry: str | None = None
+    company_description: str | None = None
+
+
+@app.put("/profiles/{user_id}", response_model=ProfileDetails)
+def put_profile(user_id: str, body: ProfileIn) -> ProfileDetails:
+    """Создать профиль пользователя (или взять готовый, если анкета не менялась) и вернуть его данные.
+    Профиль строится сразу: аспекты интересов, данные компании из датасета (несколько секунд)."""
+    svc = service()
+    svc.build_profile(UserProfileIn(user_id=user_id, **body.model_dump()))
+    return svc.profile_details(user_id)
+
+
+@app.post("/users/{user_id}/news.rebuild", status_code=202, response_model=PipelineRun)
+def rebuild_user_news(user_id: str) -> PipelineRun:
+    """Подобрать новости одному пользователю: запуск processing.run только для него (новые новости из базы
+    тоже обрабатываются). Готовность — ``GET /processing.result``; лента — ``GET /users/{user_id}/news``."""
+    try:
+        return service().start_user_run(user_id)
+    except KeyError:
+        raise HTTPException(404, f"профиль {user_id} не найден")
 
 
 @app.get("/users/{user_id}/news", response_model=UserNewsResponse)

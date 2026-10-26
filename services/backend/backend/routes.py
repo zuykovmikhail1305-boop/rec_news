@@ -7,8 +7,10 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 if __package__:
+    from . import demo
     from .ml_client import MLClient, MLUnavailable, MLNotReady, ProfileNotFound, get_ml_client
 else:
+    import demo
     from ml_client import MLClient, MLUnavailable, MLNotReady, ProfileNotFound, get_ml_client
 
 
@@ -45,9 +47,9 @@ templates.env.filters.update(safe_url=safe_url, local_date=local_date,
 def feed_state(ml, user_id, offset=0):
     feed, job, error = None, None, None
     try:
-        feed = ml.feed(user_id, limit=20, offset=offset)
+        feed = ml.feed(user_id, limit=demo.INSIGHTS_LIMIT, offset=0)
     except (ProfileNotFound, MLNotReady):
-        error = "Лента пользователя ещё не подготовлена."
+        error = None   # лента ещё подбирается — это не ошибка, показываем статус подготовки
     except MLUnavailable:
         error = "Не удалось загрузить инсайты. Попробуйте ещё раз."
     try:
@@ -90,20 +92,32 @@ def page(request, template, context, status=200):
     return response
 
 
-def profiles_page(request, ml, *, offset=0, error=None, status=200):
-    profiles = None
+_companies: dict = {}
+
+
+def demo_companies(ml):
+    """Данные трёх компаний демо из готовых профилей ML (читаются один раз)."""
+    if len(_companies) < len(demo.COMPANIES):
+        for key, source in demo.COMPANIES.items():
+            if key not in _companies:
+                _companies[key] = ml.profile(source).profile
+    return _companies
+
+
+def profiles_page(request, ml, *, error=None, status=200):
+    companies = {}
     try:
-        profiles = ml.profiles(limit=50, offset=offset)
+        companies = demo_companies(ml)
     except (MLUnavailable, ProfileNotFound):
-        error = error or "Профили пока недоступны. Запустите ML-сервис и попробуйте ещё раз."
+        error = error or "Компании пока недоступны. Запустите ML-сервис и попробуйте ещё раз."
         status = 503
-    return page(request, "demo_profiles.html", {"profiles": profiles, "error": error,
-                "offset": offset, "page_size": 50}, status)
+    return page(request, "demo_login.html", {"users": demo.USERS, "companies": companies, "error": error,
+                                             "insights_limit": demo.INSIGHTS_LIMIT}, status)
 
 
 @router.get("/profiles")
-def profiles(request: Request, offset: int = Query(0, ge=0), ml: MLClient = Depends(get_ml_client)):
-    return profiles_page(request, ml, offset=offset)
+def profiles(request: Request, ml: MLClient = Depends(get_ml_client)):
+    return profiles_page(request, ml)
 
 
 @router.get("/login", include_in_schema=False)
@@ -111,17 +125,25 @@ def legacy_login():
     return RedirectResponse("/profiles", status_code=303)
 
 
+@router.get("/enter")
+def enter(request: Request, user: str = Query(...), company: str = Query(...), ml: MLClient = Depends(get_ml_client)):
+    """Вход: профиль «роль + компания» в ML и подбор новостей только для него, затем — главная."""
+    if user not in demo.USERS or company not in demo.COMPANIES:
+        return profiles_page(request, ml, error="Выберите пользователя и компанию из списка.", status=400)
+    user_id = demo.profile_id(user, company)
+    try:
+        ml.ensure_profile(user_id, role=demo.USERS[user]["role"], company=demo_companies(ml)[company])
+        ml.rebuild_news(user_id)
+    except (MLUnavailable, ProfileNotFound, MLNotReady):
+        return profiles_page(request, ml, error="Не удалось подготовить профиль. Попробуйте ещё раз.", status=503)
+    return RedirectResponse("/?user_id=" + quote(user_id, safe=""), status_code=303)
+
+
 @router.get("/")
 def home(request: Request, user_id: str | None = Query(None, min_length=1, max_length=200),
          offset: int = Query(0, ge=0), ml: MLClient = Depends(get_ml_client)):
-    if user_id is None:
-        try:
-            available = ml.profiles(limit=1)
-        except (MLUnavailable, ProfileNotFound):
-            return profiles_page(request, ml)
-        if not available.items:
-            return profiles_page(request, ml)
-        user_id = available.items[0].user_id
+    if user_id is None or demo.parse_profile_id(user_id) is None:
+        return profiles_page(request, ml)
     try:
         details = ml.profile(user_id)
     except ProfileNotFound:
@@ -145,7 +167,7 @@ def generate_insights(user_id: str = Query(..., min_length=1, max_length=200), m
     try:
         if not ml.processing_ready():
             raise MLNotReady()
-        job = ml.generate_insights(user_id)
+        job = ml.generate_insights(user_id, limit=demo.INSIGHTS_LIMIT)
         return json_response({"user_id": user_id, "job": job.model_dump(mode="json")}, 202)
     except MLNotReady:
         return json_response({"detail": "Лента готовится. Подготовка инсайтов начнётся автоматически.", "retry": True}, 409)
@@ -163,7 +185,7 @@ def get_insights(request: Request, user_id: str = Query(..., min_length=1, max_l
     context = {"user_id": user_id, **feed_context(feed, job, error, offset, cards)}
     html = templates.env.get_template("insights_live_feed.html").render(**context)
     return json_response({"user_id": user_id, "html": html,
-        "poll": bool(job and job.status in ("queued", "running")) or bool(feed and feed.status == "not_computed" and not cards),
+        "poll": bool(job and job.status in ("queued", "running")) or not feed or feed.status == "not_computed",
         "recovered_cards": bool(cards), "error": error}, 200 if feed or cards else 503)
 
 

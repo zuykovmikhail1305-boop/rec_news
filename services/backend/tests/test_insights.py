@@ -33,7 +33,9 @@ CARD["header"]["sources_count"] = 2
 
 class FakeInsightsML(web_tests.FakeML):
     def __init__(self):
+        super().__init__()
         self.generated = []
+        self.limits = []
         self.targeted = []
         self.ready = False
         self.has_job = False
@@ -52,8 +54,9 @@ class FakeInsightsML(web_tests.FakeML):
             item["insight"]={"card_id":"ic_1","status":"ready","headline":"Стоимость финансирования останется высокой","impact":"risk","priority":"high","horizon":"1-3m","reliability":"confirmed"}
         return UserFeed(user_id=user_id,status="ready" if self.computed else "not_computed",total=1 if self.computed else 0,items=[item] if self.computed else [])
 
-    def generate_insights(self, user_id, *, news_ids=None):
+    def generate_insights(self, user_id, *, news_ids=None, limit=None):
         if news_ids is not None: self.targeted.append((user_id,news_ids))
+        self.limits.append(limit)
         self.generated.append(user_id)
         if not self.computed: raise MLNotReady()
         self.has_job = True
@@ -82,18 +85,25 @@ class InsightRoutesTests(unittest.TestCase):
     def generate(self):
         return self.client.post('/api/insights/generate',params={"user_id":"u_01"})
 
-    def test_home_shows_feed_and_auto_generation_script(self):
-        response=self.client.get('/')
+    def test_home_shows_only_ready_insights_not_news_text(self):
+        home='/?user_id='+web_tests.DEMO_ID
+        response=self.client.get(home)
         self.assertEqual(response.status_code,200)
-        self.assertIn('Синтетическая новость',response.text)
+        self.assertNotIn('Синтетическая новость',response.text)   # пока карточки нет — ни текста новости, ни ссылки
+        self.assertNotIn('Краткий текст новости',response.text)
         self.assertIn('live-insights.js',response.text)
-        self.assertIn('/insights/news_1?user_id=u_01', response.text)
+        self.ml.ready=True
+        response=self.client.get(home)
+        self.assertIn('Стоимость финансирования останется высокой',response.text)
+        self.assertIn('/insights/news_1?user_id='+web_tests.DEMO_ID, response.text)
+        self.assertNotIn('Краткий текст новости',response.text)
         self.assertEqual(self.ml.generated,[])  # GET and polling do not create jobs.
 
     def test_generation_and_polling_use_explicit_profile(self):
         response=self.client.post('/api/insights/generate?user_id=u_02')
         self.assertEqual(response.status_code,202)
         self.assertEqual(self.ml.generated,['u_02'])
+        self.assertEqual(self.ml.limits,[10])   # 10 инсайтов на пользователя
         data=self.client.get('/api/insights?user_id=u_02').json()
         self.assertEqual(data['user_id'],'u_02');self.assertTrue(data['poll'])
         self.ml.ready=True
@@ -138,7 +148,7 @@ class InsightRoutesTests(unittest.TestCase):
     def test_uncomputed_feed_is_visible_and_does_not_start_global_processing(self):
         self.ml.computed=False
         self.assertEqual(self.generate().status_code,409)
-        self.assertIn('Лента пока не подготовлена',self.client.get('/').text)
+        self.assertIn('Подбираем новости',self.client.get('/?user_id='+web_tests.DEMO_ID).text)
 
     def test_outage_has_retry_message_without_session(self):
         self.ml.unavailable=True
@@ -189,14 +199,12 @@ class InsightRoutesTests(unittest.TestCase):
     def test_done_job_card_is_displayed_when_personal_feed_is_not_computed(self):
         self.ml.ready=True;self.ml.has_job=True;self.ml.computed=False
         with patch.object(self.ml,'insight',wraps=self.ml.insight) as read:
-            page=self.client.get('/?user_id=u_02')
+            page=self.client.get('/?user_id='+web_tests.DEMO_ID)
             self.assertIn('Стоимость финансирования',page.text)
-            self.assertIn('/insights/news_1?user_id=u_02',page.text)
-            self.assertNotIn('Лента пока не подготовлена',page.text)
-            read.assert_called_with('u_02','news_1')
+            self.assertIn('/insights/news_1?user_id='+web_tests.DEMO_ID,page.text)
+            read.assert_called_with(web_tests.DEMO_ID,'news_1')
         data=self.client.get('/api/insights?user_id=u_02').json()
         self.assertTrue(data['recovered_cards'])
-        self.assertFalse(data['poll'])
         self.assertIn('Синтетический факт',data['html'])
         self.assertEqual(self.ml.generated,[])
 
@@ -205,8 +213,8 @@ class InsightRoutesTests(unittest.TestCase):
         with patch.object(self.ml,'insight',side_effect=ProfileNotFound()):
             data=self.client.get('/api/insights?user_id=u_01').json()
         self.assertFalse(data['recovered_cards'])
-        self.assertIn('готовые карточки пока недоступны',data['html'])
-        self.assertNotIn('Подготовка завершена',data['html'])
+        self.assertNotIn('Открыть инсайт',data['html'])
+        self.assertNotIn('Инсайты готовы',data['html'])
 
     def test_empty_ready_feed_also_reads_actual_completed_card(self):
         self.ml.ready=True;self.ml.has_job=True
