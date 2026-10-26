@@ -10,6 +10,7 @@ aspects = "aspects-v1"
 topics = "topics-v1"
 importance = "importance-v1"
 rerank = "rerank-v1"
+rerank_jury = "rerank-v1"           # тот же промпт rerank у второй модели («жюри»)
 analytics_check = "analytics-check-v1"
 insight_fact = "insight-fact-v1"
 insight_bank_view = "insight-bank-view-v1"
@@ -38,6 +39,7 @@ default = "universal"
 topics = "light"                 # темы, тип события, важность — классификация новости
 same_event = "light"             # дедуп: «то же событие?» да/нет
 rerank = "light"                 # оценка 0–3 новости для профиля, до 40 вызовов на ленту
+rerank_jury = "relations"        # второй «присяжный» реранка (DeepSeek), включается [ranking] rerank_jury
 news_analysis = "light"          # старый NewsAnalyzer: выжимка и шаблон аудитории
 aspects = "universal"            # аспекты интересов: структурированный профиль, раз на пользователя
 analytics_check = "relations"    # LLM-судья: связь новости с фрагментами аналитики, противоречия
@@ -91,15 +93,20 @@ development_window_days = 21
 candidates_per_aspect = 100
 max_candidates = 500
 rerank_top = 40
+rerank_jury = ["rerank_jury"]  # «жюри» реранка: доп. задачи LLM, итог — среднее оценок; ["rerank_jury"] — + DeepSeek
 feed_min = 10
 feed_max = 20
 cos_low = 0.70             # растяжение косинуса для сигнала sem
 cos_high = 0.90
 fresh_tau_hours = 24
-weights = { sem = 0.35, ent = 0.25, topic = 0.20, imp = 0.10, fresh = 0.10 }
-llm_mix = 0.6              # final = llm_mix·llm/3 + (1 − llm_mix)·retrieval
-mmr_lambda = 1
-max_per_topic_top10 = 3
+# Подбор на размеченном наборе (25.10): темы (AUC 0.77) и сущности (0.72) лучше всего отделяют нужные новости,
+# важность (0.46) и свежесть (0.52) почти не помогают; было { sem = 0.35, ent = 0.25, topic = 0.20, imp = 0.10, fresh = 0.10 }
+weights = { sem = 0.20, ent = 0.24, topic = 0.32, imp = 0.0, fresh = 0.04, industry = 0.20 }
+# industry — близость новости к отрасли и описанию компании из анкеты (0 — выключен)
+topic_gamma = 1.0          # вес темы роли в степени gamma: > 1 разводит темы с весами 0.8–1.0
+llm_mix = 0.15             # final = llm_mix·llm/3 + (1 − llm_mix)·retrieval; было 0.6 — реранк (AUC 0.755) слабее retrieval (0.786)
+mmr_lambda = 1             # 0.9 снижает nDCG@10 на 0.04
+max_per_topic_top10 = 4    # было 3
 
 [analytics]
 # Подбор аналитики к событиям (ТЗ «подбор аналитики к новостям»).

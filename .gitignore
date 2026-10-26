@@ -1,6 +1,7 @@
 
 texts/
 scripts_for_tests/
+dataset/
                                                                                                                                                                                                      
 # Byte-compiled / optimized / DLL files
 __pycache__/

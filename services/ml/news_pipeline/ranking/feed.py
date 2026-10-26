@@ -33,7 +33,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 from qdrant_client import models
@@ -63,6 +63,7 @@ class Candidate:
     topic: float = 0.0
     imp: float = 0.0
     fresh: float = 0.0
+    industry: float = 0.0     # близость к отрасли и описанию компании (нормирована внутри кандидатов пользователя)
     retrieval: float = 0.0
     llm: int | None = None
     final: float = 0.0
@@ -112,6 +113,9 @@ class FeedBuilder:
         self.config = SETTINGS.ranking
         self.log_path = Path(log_path)
         self.workers = workers
+        # Текст «отрасль и описание компании» по user_id (задаёт MLService из анкеты) — для сигнала industry.
+        self.company_text: Callable[[str], str | None] | None = None
+        self._company_vectors: dict[str, np.ndarray] = {}
 
     # --- кандидаты и сигналы ------------------------------------------------
 
@@ -135,8 +139,27 @@ class FeedBuilder:
                 news_id = str(item.id)
                 candidate = pool.setdefault(news_id, Candidate(news_id, item.payload, item.vector))
                 candidate.aspect_cos[aspect.aspect_id] = max(candidate.aspect_cos.get(aspect.aspect_id, -1.0), item.score)
-        ranked = sorted(pool.values(), key=lambda c: -max(c.aspect_cos.values()))
-        return ranked[: self.config["max_candidates"]]
+        ranked = sorted(pool.values(), key=lambda c: -max(c.aspect_cos.values()))[: self.config["max_candidates"]]
+        self._industry(profile, ranked)
+        return ranked
+
+    def _industry(self, profile: InterestProfile, candidates: list[Candidate]) -> None:
+        """Сигнал industry: косинус новости с текстом «отрасль и описание компании», растянутый между 10-м и 90-м
+        перцентилем кандидатов этого пользователя (фиксированное окно, как у sem, плохо ложится на реальные косинусы)."""
+        if not self.config["weights"].get("industry") or self.company_text is None:
+            return
+        text = self.company_text(profile.user_id)
+        if not text:
+            return
+        if text not in self._company_vectors:
+            self._company_vectors[text] = self.index.encode([text])[0]
+        company = self._company_vectors[text]
+        scored = [(c, float(np.asarray(c.vector) @ company)) for c in candidates if c.vector is not None]
+        if len(scored) < 5:
+            return
+        low, high = np.percentile([cos for _, cos in scored], [10, 90])
+        for candidate, cos in scored:
+            candidate.industry = min(max((cos - low) / (high - low), 0.0), 1.0) if high > low else 0.0
 
     def score(self, candidate: Candidate, profile: InterestProfile, *, now: datetime) -> None:
         """Пять сигналов и retrieval-скор (§7.2)."""
@@ -165,9 +188,11 @@ class FeedBuilder:
         topics = candidate.payload.get("topics") or {}
         total = sum(topics.values())
         if total > 0:
+            # topic_gamma > 1 разводит веса тем: у ролей с несколькими темами 0.9–1.0 сигнал перестаёт насыщаться
+            gamma = self.config.get("topic_gamma", 1.0)
             candidate.topic = sum(
-                profile.topic_weights.get(name, role_topic_weight(profile.role, TOPICS_BY_NAME[name].id)
-                                          if name in TOPICS_BY_NAME else 0.0) * p
+                (profile.topic_weights.get(name, role_topic_weight(profile.role, TOPICS_BY_NAME[name].id)
+                                           if name in TOPICS_BY_NAME else 0.0) ** gamma) * p
                 for name, p in topics.items()
             ) / total
 
@@ -180,6 +205,7 @@ class FeedBuilder:
         candidate.retrieval = (
             weights["sem"] * candidate.sem + weights["ent"] * candidate.ent + weights["topic"] * candidate.topic
             + weights["imp"] * candidate.imp + weights["fresh"] * candidate.fresh
+            + weights.get("industry", 0.0) * candidate.industry
         )
 
     # --- LLM-реранк -----------------------------------------------------------
@@ -202,26 +228,36 @@ class FeedBuilder:
             return False
         profile_text = _profile_text(profile)
         mix = self.config["llm_mix"]
+        # «Жюри»: те же новость и промпт оценивают ещё задачи rerank_jury (свои модели в [llm_tasks]);
+        # итог — среднее оценок. Пусто — один реранк (Gemma).
+        tasks = ["rerank", *(self.config.get("rerank_jury") or [])]
         available = True
 
         def judge(candidate: Candidate) -> None:
             nonlocal available
-            try:
-                data = llm.json(
-                    "rerank",
-                    [{"role": "system", "content": _RERANK_PROMPT},
-                     {"role": "user", "content": f"Профиль:\n{profile_text}\n\nНовость:\n{_news_text(candidate.payload)}"}],
-                    schema=_RERANK_SCHEMA, cache_key=f"{profile.user_id}:{candidate.event_id}",
-                    validator=_validate_rerank, max_tokens=700,
-                )
-            except LLMUnavailable:
-                available = False
+            messages = [{"role": "system", "content": _RERANK_PROMPT},
+                        {"role": "user", "content": f"Профиль:\n{profile_text}\n\nНовость:\n{_news_text(candidate.payload)}"}]
+            scores = []
+            for task in tasks:
+                try:
+                    data = llm.json(task, messages, schema=_RERANK_SCHEMA,
+                                    cache_key=f"{profile.user_id}:{candidate.event_id}",
+                                    validator=_validate_rerank, max_tokens=700)
+                except LLMUnavailable:
+                    if task == "rerank":
+                        available = False
+                        return
+                    continue
+                except LLMError:
+                    continue
+                scores.append(data["score"])
+                if candidate.why_source != "llm":
+                    candidate.why, candidate.why_source = data["why_relevant"], "llm"
+            if not scores:
                 return
-            except LLMError:
-                return
-            candidate.llm = data["score"]
-            candidate.why, candidate.why_source = data["why_relevant"], "llm"
-            candidate.final = mix * candidate.llm / 3 + (1 - mix) * candidate.retrieval
+            value = sum(scores) / len(scores)
+            candidate.llm = round(value)
+            candidate.final = mix * value / 3 + (1 - mix) * candidate.retrieval
 
         with ThreadPoolExecutor(self.workers) as pool:
             list(pool.map(judge, candidates))
