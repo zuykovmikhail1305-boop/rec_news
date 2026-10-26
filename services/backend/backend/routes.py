@@ -5,6 +5,7 @@ from urllib.parse import quote, urlsplit
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field
 
 if __package__:
     from . import demo
@@ -250,3 +251,31 @@ def generate_card(news_id: str, user_id: str = Query(..., min_length=1, max_leng
 @router.get("/api/processing/status")
 def processing_status(request: Request):
     return json_response(getattr(request.app.state, "processing", {"enabled": False, "status": "disabled"}))
+
+
+class ChatMessageIn(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+    new_dialog: bool = False
+
+
+@router.get("/api/chat")
+def chat_history(user_id: str = Query(..., min_length=1, max_length=200), ml: MLClient = Depends(get_ml_client)):
+    try:
+        history = ml.chat_history(user_id)
+    except ProfileNotFound:
+        return json_response({"detail": "Профиль не найден."}, 404)
+    except MLUnavailable:
+        return json_response({"detail": "Чат временно недоступен."}, 503)
+    return json_response(history.model_dump(mode="json"))
+
+
+@router.post("/api/chat")
+def chat_send(body: ChatMessageIn, user_id: str = Query(..., min_length=1, max_length=200),
+              ml: MLClient = Depends(get_ml_client)):
+    try:
+        answer = ml.chat(user_id, body.message.strip(), new_dialog=body.new_dialog)
+    except ProfileNotFound:
+        return json_response({"detail": "Профиль не найден."}, 404)
+    except MLUnavailable:
+        return json_response({"detail": "Ассистент не ответил. Попробуйте ещё раз."}, 503)
+    return json_response(answer.model_dump(mode="json"))

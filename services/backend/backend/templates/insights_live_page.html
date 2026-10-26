@@ -7,4 +7,4 @@
 <p class="live-message" data-card-message role="status" aria-live="polite"></p>
 <button type="button" data-retry-insights>Обновить карточку</button>
 </main></div></div>{% endblock %}
-{% block scripts %}<script src="/static/live-insights.js" defer></script>{% endblock %}
+{% block scripts %}{% include "chat_panel.html" %}<script src="/static/live-insights.js" defer></script>{% endblock %}

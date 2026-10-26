@@ -84,7 +84,7 @@ class DemoLoginTests(unittest.TestCase):
         for url in ("/", "/profiles", "/?user_id=u_02"):   # без демо-профиля — страница входа
             response = self.client.get(url)
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.text.count('class="login-user"'), 3)
+            self.assertEqual(response.text.count('class="card login-user"'), 3)
             self.assertEqual(response.text.count('name="company"'), 9)
             for name in ("Компания Альфа", "Компания Бета", "Компания Гамма", "финансовый директор"):
                 self.assertIn(name, response.text)
@@ -173,3 +173,32 @@ class DemoClientTests(unittest.TestCase):
         self.assertEqual(json.loads(requests[0].content)["company_id"], "U_2")
         self.assertEqual(requests[1].url.path, f"/users/{DEMO_ID}/news.rebuild")
         self.assertEqual(json.loads(requests[2].content), {"refresh": False, "limit": 10})
+
+
+class ChatRoutesTests(unittest.TestCase):
+    def setUp(self):
+        from backend.ml_client import ChatAnswer, ChatHistory
+        self.sent = []
+        ml = FakeML()
+        ml.chat_history = lambda user_id, limit=50: ChatHistory(user_id=user_id, turns=[])
+        def chat(user_id, message, new_dialog=False):
+            self.sent.append((user_id, message, new_dialog))
+            return ChatAnswer(user_id=user_id, text="Ответ", sections=[{"title": "Вывод", "origin": "ai", "text": "Ответ"}])
+        ml.chat = chat
+        app.dependency_overrides[get_ml_client] = lambda: ml
+        self.client = TestClient(app)
+
+    def tearDown(self):
+        self.client.close()
+        app.dependency_overrides.clear()
+
+    def test_chat_history_and_message(self):
+        self.assertEqual(self.client.get("/api/chat", params={"user_id": DEMO_ID}).json()["turns"], [])
+        response = self.client.post("/api/chat", params={"user_id": DEMO_ID}, json={"message": " Что со ставкой? "})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["sections"][0]["text"], "Ответ")
+        self.assertEqual(self.sent, [(DEMO_ID, "Что со ставкой?", False)])
+        self.assertEqual(self.client.post("/api/chat", params={"user_id": DEMO_ID}, json={"message": ""}).status_code, 422)
+
+    def test_chat_panel_on_home(self):
+        self.assertIn("data-chat", self.client.get("/?user_id=" + DEMO_ID).text)

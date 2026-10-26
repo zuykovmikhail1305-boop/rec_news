@@ -123,6 +123,42 @@ class ProcessingJob(BaseModel):
     news: int = Field(ge=0)
 
 
+class ChatSection(BaseModel):
+    title: str = ""
+    origin: str = "ai"
+    text: str = ""
+    sources: list[str] = Field(default_factory=list)
+
+
+class ChatSource(BaseModel):
+    id: str
+    type: str = "news"
+    title: str = ""
+    source: str | None = None
+    published_at: str | None = None
+    url: str | None = None
+
+
+class ChatAnswer(BaseModel):
+    user_id: str
+    status: str = "ok"
+    text: str = ""
+    sections: list[ChatSection] = Field(default_factory=list)
+    sources: list[ChatSource] = Field(default_factory=list)
+    clarify: str | None = None
+
+
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str
+    answer: ChatAnswer | None = None
+
+
+class ChatHistory(BaseModel):
+    user_id: str
+    turns: list[ChatTurn] = Field(default_factory=list)
+
+
 class MLClient:
     def __init__(self, client):
         self.client = client
@@ -196,6 +232,14 @@ class MLClient:
         if result.news_id != news_id:
             raise MLUnavailable("ML-сервис вернул карточку другой новости")
         return result
+
+    def chat_history(self, user_id, *, limit=50):
+        return self._owned(self._get("/chat/" + quote(user_id, safe=""), ChatHistory, limit=limit), user_id)
+
+    def chat(self, user_id, message, *, new_dialog=False):
+        """Вопрос агенту: ответ по ленте пользователя и аналитике банка строится 1–3 минуты."""
+        return self._owned(self._request("POST", "/chat/" + quote(user_id, safe=""), ChatAnswer,
+                                         json={"message": message, "new_dialog": new_dialog}, timeout=300), user_id)
 
 
 def get_ml_client():

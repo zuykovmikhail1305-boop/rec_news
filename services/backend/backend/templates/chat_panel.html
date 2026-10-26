@@ -1,0 +1,14 @@
+<button type="button" class="chat-fab" data-chat-open aria-controls="chat-panel">Спросить ассистента <span class="chip ai">AI</span></button>
+<section class="chat chat-float hidden" id="chat-panel" data-chat data-user-id="{{ user_id }}" aria-label="Чат с ассистентом">
+<div class="chat-h"><b>Ассистент <span class="chip ai">AI</span><button type="button" class="chat-x" data-chat-close aria-label="Закрыть">×</button></b>
+<span>Отвечает по новостям вашей ленты и аналитике Альфа-Банка</span>
+<button type="button" class="chat-new" data-chat-new>Новый диалог</button></div>
+<div class="chat-body" data-chat-body aria-live="polite"></div>
+<div class="sugg" data-chat-sugg>
+<button type="button">Что главное для моей компании на этой неделе?</button>
+<button type="button">Какие риски связаны с кредитами и ставкой?</button>
+<button type="button">Что думает банк о курсе рубля?</button>
+</div>
+<form class="chat-in" data-chat-form><input name="message" maxlength="2000" placeholder="Задайте вопрос…" autocomplete="off" required><button type="submit" aria-label="Отправить">➤</button></form>
+</section>
+<script src="/static/chat.js" defer></script>

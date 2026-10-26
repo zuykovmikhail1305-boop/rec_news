@@ -130,7 +130,7 @@ class InsightRoutesTests(unittest.TestCase):
         self.ml.ready=True
         response=self.client.get('/api/insights/news_1?user_id=u_01')
         self.assertFalse(response.json()['poll'])
-        self.assertIn('что произошло',response.json()['html'])
+        self.assertIn('Что произошло',response.json()['html'])
         self.assertEqual(self.ml.generated,[])
 
     def test_failed_job_or_unknown_news_does_not_poll_forever(self):

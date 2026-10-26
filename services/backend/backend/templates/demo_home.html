@@ -37,4 +37,4 @@
 {% else %}<div class="empty-state card" role="alert"><h1>Данные временно недоступны</h1><p>Не удалось получить профиль компании. Попробуйте ещё раз или выберите другую компанию.</p><a class="btn btn-primary" href="/?user_id={{ user_id|urlencode }}">Попробовать ещё раз</a></div>{% endif %}
 </main></div></div>{% endblock %}
 
-{% block scripts %}{% if details %}<script src="/static/live-insights.js" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{% if details %}{% include "chat_panel.html" %}{% endif %}{% if details %}<script src="/static/live-insights.js" defer></script>{% endif %}{% endblock %}
